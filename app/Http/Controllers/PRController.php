@@ -9,6 +9,9 @@ use App\Models\PartStock;
 use App\Models\prRequest;
 use App\Models\User;
 
+use App\Mail\TestEmail;
+use Illuminate\Support\Facades\Mail;
+
 class PRController extends Controller
 {
     //
@@ -98,10 +101,10 @@ class PRController extends Controller
                     'status' =>  $newTicket->status // Changed to use $newTicket
                 ];
 
-                // $hodId = auth()->user()->deptList->user_hod_id;
-                // $hodEmail = User::find($hodId)->email;
+                $hodId = auth()->user()->deptList->user_hod_id;
+                $hodEmail = "ariffalkzn@gmail.com"; // User::find($hodId)->email;
 
-                // Mail::to($hodEmail)->send(new TestEmail($data));
+                Mail::to($hodEmail)->send(new TestEmail($data));
             }
 
             // Log history
@@ -376,7 +379,7 @@ class PRController extends Controller
             $priceXqty = $price * $qty;
             $priceTotal = $priceXqty + $otherCost;
 
-            return view('printTicket', [
+            return view('print.print', [
                 'dataT' => prTicket::find($data->id),
                 'dataN' => $priceTotal,
                 'dataU' => User::find($data->approved_user_id)

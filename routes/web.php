@@ -13,6 +13,9 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+// Printed Ticket
+Route::get('/printTicket/{ticketCode}', [PRController::class, 'print'])->name('printTicket');
+
 Route::group(['middleware' => 'auth'], function () {
 
     Route::get('/dashboard', function () {
@@ -80,6 +83,15 @@ Route::group(['middleware' => 'auth'], function () {
     Route::post('/booking_room/store', [BookingRoomController::class, 'store'])->name('booking_room.store');
     Route::delete('/booking_room/{id}', [BookingRoomController::class, 'destroy'])->name('booking_room.destroy');
     // End Of Booking Room
+
+    Route::get('/test-mail', function () {
+        Mail::raw('This is a test email from Laravel using Gmail SMTP.', function ($message) {
+            $message->to('ariffalkzn@gmail.com')
+                    ->subject('Test Mail from Laravel');
+        });
+
+        return 'Sent!';
+    });
     
 });
 
