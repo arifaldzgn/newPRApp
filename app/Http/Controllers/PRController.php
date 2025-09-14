@@ -182,7 +182,7 @@ class PRController extends Controller
 
     public function pending()
     {
-        if(auth()->user()->role === 'pic' or auth()->user()->role === 'admin'){
+        if(auth()->user()->role === 'hod' or auth()->user()->role === 'admin'){
             return view('pr.pending_pr', [
                 'dataT' => prTicket::where(function($query) {
                     $query->where('status', 'Pending')

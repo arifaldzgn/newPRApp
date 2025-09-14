@@ -166,8 +166,8 @@
 
             $.noConflict();
 
-            function initializeSelectpicker() {
-                $('.selectpicker').selectpicker('refresh');
+            function initializeSelectpicker($el) {
+                $el.selectpicker();
             }
 
             function fillOtherFields(partName, arrayCount) {
@@ -203,9 +203,13 @@
                     <div class="mb-3">
                         <div class="form-group">
                             <label>Part/Service Name</label>
-                            <select class="form-control selectpicker" multiple data-max-options="1" name="pr_request[${arrayCount}][part_name]" data-live-search="true" onchange="" data-array-count="${arrayCount}">
+                            <select class="form-control selectpicker" 
+                                    name="pr_request[${arrayCount}][part_name]" 
+                                    data-live-search="true" 
+                                    data-array-count="${arrayCount}" 
+                                    title="Select Part/Service">
                                 @foreach ($dataR as $dR)
-                                <option value="{{ $dR->id }}">{{ $dR->part_name }}</option>
+                                    <option value="{{ $dR->id }}">{{ $dR->part_name }}</option>
                                 @endforeach
                             </select>
                             <small id="emailHelp" class="form-text text-muted">Part/Service not available? <a href="" class="text-primary">Click here</a> to add new data.</small>
@@ -250,12 +254,14 @@
                 <br>
             `;
                     $("#prRequestForm").append(newItem);
+
+                    // Initialize only the new selectpicker (not all)
+                    let $newSelect = $(`#prRequestForm select[name="pr_request[${arrayCount}][part_name]"]`);
+                    $newSelect.selectpicker();
+
                     arrayCount++;
                     itemCount++;
-
                     $('#submitRequest').prop('disabled', false);
-
-                    initializeSelectpicker();
                 } else {
                     Swal.fire({
                         icon: 'error',
