@@ -17,7 +17,7 @@ class deptList extends Model
         'id'
     ];
 
-    public function user()
+    public function users()
     {
         return $this->hasMany(User::class, 'dept_id');
     }

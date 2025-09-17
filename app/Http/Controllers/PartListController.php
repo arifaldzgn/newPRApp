@@ -7,6 +7,7 @@ use App\Models\partList;
 use App\Models\assetCode;
 use App\Models\PartStock;
 use App\Models\prRequest;
+use App\Models\PrLogHistory;
 
 class PartListController extends Controller
 {
@@ -177,5 +178,14 @@ class PartListController extends Controller
         ]);
 
         return response()->json(['message' => 'Part details updated successfully']);
+    }
+
+    public function log()
+    {
+        // return PartStock::orderBy('created_at', 'desc')->get();
+        return view('parts.pr_log', [
+            // 'logs' => PrLogHistory::orderBy('created_at', 'asc')->get(),
+            'partStockLogs' => PartStock::orderBy('created_at', 'desc')->get()
+        ]);
     }
 }

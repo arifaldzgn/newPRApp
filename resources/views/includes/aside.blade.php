@@ -9,7 +9,7 @@
                 <li class="menu-title" key="t-menu">Menu</li>
 
 
-
+                @if(auth()->user()->role === 'admin')
                 <li>
                     <a href="javascript: void(0);" class="has-arrow waves-effect">
                         <i class="bx bx-home-circle"></i>
@@ -17,12 +17,12 @@
                     </a>
                     <ul class="sub-menu" aria-expanded="false" style="">
                         <li><a href="{{ route('account') }}" key="t-users">Users</a></li>
-                        <li><a href="{{ route('department') }}" key="t-dept">Departments</a></li>
+                        <li><a href="{{ route('departments') }}" key="t-dept">Departments</a></li>
                         <li><a href="{{ route('role') }}" key="t-role">Roles</a></li>
 
                     </ul>
-
                 </li>
+                @endif
 
 
                 <li>
@@ -65,21 +65,22 @@
                     </ul>
                 </li> --}}
 
+                @if(auth()->user()->role === 'purchasing' || auth()->user()->role === 'admin')
                 <li>
                     <a href="javascript: void(0);" class="has-arrow waves-effect">
                         <i class="bx bx-home-circle"></i>
                         <span key="t-dashboards">Purchasing</span>
                     </a>
                     <ul class="sub-menu" aria-expanded="false">
-                        {{-- <li><a href="{{ route('account') }}" key="t-default">Users Management</a></li> --}}
                         <li><a href="{{ route('partlist') }}" key="t-saas">Inventory</a></li>
-
+                        <li><a href="{{ route('partlistLog') }}" key="t-default">Inventory Log</a></li>
                     </ul>
                 </li>
+                @endif
 
 
                 <li>
-                    <a href="apps-filemanager.html" class="waves-effect">
+                    <a href="{{ route('user_log') }}" class="waves-effect">
                         <i class="bx bx-file"></i>
                         <span key="t-file-manager">Log History</span>
                     </a>

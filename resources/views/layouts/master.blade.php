@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>@yield('title') | Skote - Admin & Dashboard Template</title>
+    <title>@yield('title') | Etowa PR Dept</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta content="Premium Multipurpose Admin & Dashboard Template" name="description" />
     <meta content="Themesbrand" name="author" />
@@ -24,6 +24,7 @@
     <link href="{{ asset('assets/libs/@fullcalendar/daygrid/main.min.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/libs/@fullcalendar/bootstrap/main.min.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/libs/@fullcalendar/timegrid/main.min.css') }}" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 
 
     @stack('styles')
@@ -126,6 +127,22 @@
         href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.14.0-beta3/dist/css/bootstrap-select.min.css">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.14.0-beta3/dist/js/bootstrap-select.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Cari semua menu yang aktif
+        document.querySelectorAll("#side-menu .mm-active").forEach(function (activeItem) {
+            let parent = activeItem.closest("ul.sub-menu");
+            if (parent) {
+                parent.classList.add("mm-show"); // buka sub-menu
+                let parentLink = parent.previousElementSibling;
+                if (parentLink) {
+                    parentLink.classList.add("mm-active"); // highlight induk
+                }
+            }
+        });
+    });
+    </script>
+
 
     @stack('scripts')
 </body>

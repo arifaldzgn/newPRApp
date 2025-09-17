@@ -36,12 +36,12 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
+                            {{-- <tr>
                                 <td>2023-10-01</td>
                                 <td>PR-001</td>
                                 <td>John Doe</td>
                                 <td><span class="badge bg-success">Approved</span></td>
-                            </tr>
+                            </tr> --}}
                             @foreach ($dataT as $dT)
                                 <tr>
                                     <td>{{ \Carbon\Carbon::parse($dT->created_at)->format('d F Y, h:i A') }}</td>

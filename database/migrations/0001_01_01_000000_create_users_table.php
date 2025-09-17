@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('badge_no')->unique()->nullable(); // add ->nullable()
             $table->string('role')->nullable();               // add ->nullable()
             $table->string('dept_id')->nullable();
+            $table->integer('is_active')->default(1); // 1 = active, 0 = inactive
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();

@@ -222,99 +222,39 @@
                 </button>
             </div>
 
+            <!-- In includes/header.blade.php -->
             <div class="dropdown d-inline-block">
-                <button type="button" class="btn header-item noti-icon waves-effect"
-                    id="page-header-notifications-dropdown" data-bs-toggle="dropdown" aria-haspopup="true"
-                    aria-expanded="false">
+                <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-notifications-dropdown"
+                    data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="bx bx-bell bx-tada"></i>
-                    <span class="badge bg-danger rounded-pill">3</span>
+                    <span class="badge bg-danger rounded-pill" id="notification-count">0</span>
                 </button>
-                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
+                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0" id="notification-dropdown"
                     aria-labelledby="page-header-notifications-dropdown">
                     <div class="p-3">
                         <div class="row align-items-center">
                             <div class="col">
-                                <h6 class="m-0" key="t-notifications"> Notifications </h6>
+                                <h6 class="m-0" key="t-notifications">Notifications</h6>
                             </div>
                             <div class="col-auto">
-                                <a href="#!" class="small" key="t-view-all"> View All</a>
+                                <a href="{{ route('notifications.all') }}" class="small" key="t-view-all">View All</a>
                             </div>
                         </div>
                     </div>
-                    <div data-simplebar style="max-height: 230px;">
-                        <a href="javascript: void(0);" class="text-reset notification-item">
-                            <div class="d-flex">
-                                <div class="avatar-xs me-3">
-                                    <span class="avatar-title bg-primary rounded-circle font-size-16">
-                                        <i class="bx bx-cart"></i>
-                                    </span>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h6 class="mb-1" key="t-your-order">Your order is placed</h6>
-                                    <div class="font-size-12 text-muted">
-                                        <p class="mb-1" key="t-grammer">If several languages coalesce the grammar</p>
-                                        <p class="mb-0"><i class="mdi mdi-clock-outline"></i> <span key="t-min-ago">3
-                                                min ago</span></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
-                        <a href="javascript: void(0);" class="text-reset notification-item">
-                            <div class="d-flex">
-                                <img src="{{ asset('assets/images/users/avatar-3.jpg') }}"
-                                    class="me-3 rounded-circle avatar-xs" alt="user-pic">
-                                <div class="flex-grow-1">
-                                    <h6 class="mb-1">James Lemire</h6>
-                                    <div class="font-size-12 text-muted">
-                                        <p class="mb-1" key="t-simplified">It will seem like simplified English.</p>
-                                        <p class="mb-0"><i class="mdi mdi-clock-outline"></i> <span
-                                                key="t-hours-ago">1 hours ago</span></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
-                        <a href="javascript: void(0);" class="text-reset notification-item">
-                            <div class="d-flex">
-                                <div class="avatar-xs me-3">
-                                    <span class="avatar-title bg-success rounded-circle font-size-16">
-                                        <i class="bx bx-badge-check"></i>
-                                    </span>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h6 class="mb-1" key="t-shipped">Your item is shipped</h6>
-                                    <div class="font-size-12 text-muted">
-                                        <p class="mb-1" key="t-grammer">If several languages coalesce the grammar
-                                        </p>
-                                        <p class="mb-0"><i class="mdi mdi-clock-outline"></i> <span
-                                                key="t-min-ago">3 min ago</span></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
-
-                        <a href="javascript: void(0);" class="text-reset notification-item">
-                            <div class="d-flex">
-                                <img src="{{ asset('assets/images/users/avatar-4.jpg') }}"
-                                    class="me-3 rounded-circle avatar-xs" alt="user-pic">
-                                <div class="flex-grow-1">
-                                    <h6 class="mb-1">Salena Layfield</h6>
-                                    <div class="font-size-12 text-muted">
-                                        <p class="mb-1" key="t-occidental">As a skeptical Cambridge friend of mine
-                                            occidental.</p>
-                                        <p class="mb-0"><i class="mdi mdi-clock-outline"></i> <span
-                                                key="t-hours-ago">1 hours ago</span></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </a>
+                    <div data-simplebar style="max-height: 230px;" id="notification-content">
+                        <!-- Notifications will be loaded here -->
                     </div>
                     <div class="p-2 border-top d-grid">
-                        <a class="btn btn-sm btn-link font-size-14 text-center" href="javascript:void(0)">
+                        <a class="btn btn-sm btn-link font-size-14 text-center" href="{{ route('notifications.all') }}">
                             <i class="mdi mdi-arrow-right-circle me-1"></i> <span key="t-view-more">View More..</span>
                         </a>
                     </div>
                 </div>
             </div>
+
+            <script>
+                
+            </script>
 
             <div class="dropdown d-inline-block">
                 <button type="button" class="btn header-item waves-effect" id="page-header-user-dropdown"
@@ -356,3 +296,88 @@
         </div>
     </div>
 </header>
+
+@section('page-vendors-scripts')
+ <script>
+        $(document).ready(function() {
+            function loadNotifications() {
+                $.ajax({
+                    url: '{{ route("notifications.fetch") }}',
+                    method: 'GET',
+                    data: { _token: '{{ csrf_token() }}' },
+                    success: function(response) {
+                        console.log('Response:', response); // Debug response
+                        $('#notification-count').text(response.count || 0);
+                        $('#notification-content').html(response.html || '<p class="p-3 text-center">No new notifications.</p>');
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error:', error); // Debug errors
+                        $('#notification-count').text('0');
+                        $('#notification-content').html('<p class="p-3 text-center">Failed to load notifications.</p>');
+                    }
+                });
+            }
+
+            // Load notifications on page load
+            loadNotifications();
+
+            // Refresh every 30 seconds
+            setInterval(loadNotifications, 30000);
+
+            // Mark as read and navigate on click
+            $(document).on('click', '.notification-item', function(e) {
+                e.preventDefault(); // Prevent default navigation
+                e.stopPropagation(); // Prevent dropdown from closing
+                let $link = $(this);
+                let id = $link.data('id');
+                console.log('Clicked notification ID:', id); // Debug click
+
+                // Disable the link temporarily to prevent multiple clicks
+                $link.addClass('disabled');
+
+                $.ajax({
+                    url: '{{ route("notifications.read") }}',
+                    method: 'POST',
+                    data: { id: id, _token: '{{ csrf_token() }}' },
+                    success: function() {
+                        console.log('Marked as read:', id); // Debug success
+                        loadNotifications(); // Update count and content
+                        // Navigate after a short delay to ensure UI update
+                        setTimeout(function() {
+                            window.location.href = $link.attr('href');
+                        }, 100);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Read error:', error); // Debug read errors
+                        $link.removeClass('disabled'); // Re-enable if error
+                    },
+                    complete: function() {
+                        $link.removeClass('disabled'); // Re-enable after request
+                    }
+                });
+            });
+
+            // Initialize Bootstrap dropdown
+            var dropdownElement = document.getElementById('page-header-notifications-dropdown');
+            if (dropdownElement) {
+                new bootstrap.Dropdown(dropdownElement, {
+                    autoClose: false // Prevent auto-close on click inside
+                });
+            }
+
+            // Ensure sidebar menu initialization (your existing code)
+            document.addEventListener("DOMContentLoaded", function() {
+                document.querySelectorAll("#side-menu .mm-active").forEach(function(activeItem) {
+                    let parent = activeItem.closest("ul.sub-menu");
+                    if (parent) {
+                        parent.classList.add("mm-show");
+                        let parentLink = parent.previousElementSibling;
+                        if (parentLink) {
+                            parentLink.classList.add("mm-active");
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+@endsection

@@ -1,11 +1,9 @@
 @extends('layouts.master')
 
-@section('title', 'Create PR')
-@section('description', 'Create Purchase Request page description')
+@section('title', 'Manage Users Account')
+@section('description', 'User account management page')
 
 @section('content')
-
-    <!-- begin:: Content -->
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -15,7 +13,6 @@
                     <i class="bx bx-check-double font-size-16 align-middle me-2"></i> Add New User
                 </button>
             </div>
-
         </div>
     </div>
 
@@ -23,10 +20,8 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
-
                     <h4 class="card-title">Users Management</h4>
-                    <p class="card-description text-muted"><small> All user accounts with changeable <code> Roles
-                            </code></small></p>
+                    <p class="card-description text-muted"><small>All user accounts with changeable <code>Roles</code></small></p>
                     <table id="example" class="table table-striped" style="width:100%">
                         <thead>
                             <tr>
@@ -36,60 +31,48 @@
                                 <th>Department</th>
                                 <th>PIC Name</th>
                                 <th>Role</th>
+                                <th>Status</th>
                                 <th class="t-center">Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @php
-                                // dd($data);
-                            @endphp
                             @foreach ($data as $d)
                                 <tr>
                                     <td>{{ $loop->iteration }}</td>
                                     <td>{{ $d->name }}</td>
                                     <td>{{ $d->badge_no }}</td>
-                                    <td>{{ $d->deptList->dept_name }}</td>
-                                    <td>{{ App\Models\User::find($d->deptList->user_hod_id)->name }}</td>
-                                    @if ($d->role === 'admin')
-                                        <td>
+                                    <td>{{ $d->deptList ? $d->deptList->dept_name : 'N/A' }}</td>
+                                    <td>{{ $d->deptList && $d->deptList->hod ? $d->deptList->hod->name : 'N/A' }}</td>
+                                    <td>
+                                        @if ($d->role === 'admin')
                                             <small class="text-primary">{{ $d->role }}</small>
-                                        </td>
-                                    @elseif ($d->role === 'hod')
-                                        <td>
+                                        @elseif ($d->role === 'hod')
                                             <small class="text-warning">{{ $d->role }}</small>
-                                        </td>
-                                    @elseif ($d->role === 'purchasing')
-                                        <td>
+                                        @elseif ($d->role === 'purchasing')
                                             <small class="text-danger">{{ $d->role }}</small>
-                                        </td>
-                                    @else
-                                        <td>
+                                        @else
                                             <small class="text-secondary">{{ $d->role }}</small>
-                                        </td>
-                                    @endif
-                                    {{-- <td>
-                                        <button class="updateBtn btn btn-primary" data-request-id="{{ $d->id }}"
-                                            onclick="console.log('{{ $d->id }}')"><i class="fa fa-edit"></i></button>
-                                        @if ($d->role !== 'admin')
-                                            <button class="btn btn-danger delete-btn" data-user-id="{{ $d->id }}"><i
-                                                    class="fa fa-trash"></i></button>
                                         @endif
-                                    </td> --}}
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ $d->status === 'Active' ? 'bg-success' : 'bg-danger' }}">
+                                            {{ $d->status ?? 'Active' }}
+                                        </span>
+                                    </td>
                                     <td>
                                         <div class="dropdown">
                                             <button class="btn btn-light dropdown-toggle" type="button"
-                                                id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                                                Action<i class="mdi mdi-chevron-down"></i>
+                                                id="dropdownMenuButton-{{ $d->id }}" data-bs-toggle="dropdown" aria-expanded="false">
+                                                Action <i class="mdi mdi-chevron-down"></i>
                                             </button>
-                                            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton"
-                                                data-popper-placement="bottom-start"
-                                                style="position: absolute; inset: 0px auto auto 0px; margin: 0px; transform: translate3d(0px, 39px, 0px);">
+                                            <div class="dropdown-menu" aria-labelledby="dropdownMenuButton-{{ $d->id }}">
                                                 <a class="dropdown-item updateBtn" data-request-id="{{ $d->id }}"
-                                                    href="#">Edit</a>
-                                                <a class="dropdown-item" href="#">View</a>
+                                                    href="javascript:void(0);">Edit</a>
+                                                <a class="dropdown-item viewBtn" data-view-id="{{ $d->id }}"
+                                                    href="javascript:void(0);">View</a>
                                                 @if ($d->role !== 'admin')
                                                     <a class="dropdown-item delete-btn" data-user-id="{{ $d->id }}"
-                                                        href="#">Delete</a>
+                                                        href="javascript:void(0);">Delete</a>
                                                 @endif
                                             </div>
                                         </div>
@@ -100,97 +83,86 @@
                     </table>
                 </div>
             </div>
-        </div> <!-- end col -->
+        </div>
     </div>
 
-    {{-- Modal Create Account --}}
-    <div class="modal fade" id="createAccountModal" data-backdrop="static" data-keyboard="false" tabindex="-1"
-        aria-labelledby="staticBackdropLabel" aria-hidden="true">
+    <!-- Create Account Modal -->
+    <div class="modal fade" id="createAccountModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+        aria-labelledby="createAccountModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h3 class="modal-title fs-5" id="createAccountModalLabel">Create Account</h3>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-
                 </div>
                 <div class="modal-body">
-                    <!--  -->
-                    <div class="container">
-                        <form id="createAccountForm" method="POST">
-                            @csrf
-                            <!-- Material Request Information -->
-                            <div class="mb-3">
-                                <label class="form-label">Name</label>
-                                <input type="text" class="form-control" name="name" placeholder="Employee Name"
-                                    required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Badge <small class="small-text text-secondary">as
-                                        Username</small></label>
-                                <input type="text" class="form-control" name="badge_no" placeholder="Employee Badge"
-                                    required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Email</label>
-                                <input type="email" class="form-control" name="email" placeholder="Employee Email"
-                                    required>
-                            </div>
-                            <div class="mb-3">
-                                <div class="form-group">
-                                    <label for="exampleFormControlSelect1">Department</label>
-                                    <select class="form-control" name="deptList_id">
-                                        @foreach ($deptList as $dl)
-                                            <option value="{{ $dl->id }}">{{ $dl->dept_name }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <div class="form-group">
-                                    <label for="exampleFormControlSelect1">Role</label>
-                                    <select class="form-control" name="role">
-                                        <option value="hod">HOD | PIC</option>
-                                        {{-- <option value="hod2">HOD | GatePass Approval</option> --}}
-                                        <option value="regular">Clerk | Regular</option>
-                                        <option value="purchasing">Purchase Dept | Purchasing</option>
-                                        <option value="security">Security | Security</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label"> The default password for all users is
-                                    <a class="text-primary">12345</a>
-                                </label>
-                            </div>
-                        </form>
-                    </div>
+                    <form id="createAccountForm" method="POST">
+                        @csrf
+                        <div class="mb-3">
+                            <label class="form-label">Name</label>
+                            <input type="text" class="form-control" name="name" placeholder="Employee Name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Badge <small class="text-muted">as Username</small></label>
+                            <input type="text" class="form-control" name="badge_no" placeholder="Employee Badge" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email" placeholder="Employee Email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="deptList_id">Department</label>
+                            <select class="form-control" name="deptList_id" required>
+                                <option value="">Select Department</option>
+                                @foreach ($deptList as $dl)
+                                    <option value="{{ $dl->id }}">{{ $dl->dept_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="role">Role</label>
+                            <select class="form-control" name="role" required>
+                                <option value="hod">HOD | PIC</option>
+                                <option value="regular">Clerk | Regular</option>
+                                <option value="purchasing">Purchase Dept | Purchasing</option>
+                                <option value="security">Security | Security</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Status</label>
+                            <select class="form-control" name="status" required>
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Default password: <a class="text-primary">12345</a></label>
+                        </div>
+                    </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-success btn-block" id="submitRequest">Submit Request</button>
+                    <button type="button" class="btn btn-success btn-block" id="submitRequest">Submit Request</button>
+                    <button type="button" class="btn btn-secondary btn-block" data-bs-dismiss="modal">Cancel</button>
                 </div>
             </div>
         </div>
     </div>
-    {{-- End Of Modal Create Account --}}
 
-    {{-- Edit Account Modal --}}
-    <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel"
-        aria-hidden="true">
-        <div class="modal-dialog" role="document">
+    <!-- Edit Account Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Account Details</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+                    <h5 class="modal-title" id="editModalLabel">Edit Account Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <!-- Form fields for editing/inputting -->
                     <form id="editForm">
-                        <input type="hidden" id="partId">
+                        @csrf
+                        <input type="hidden" id="userId" name="id">
                         <div class="form-group mb-3">
                             <label for="name">Employee Name</label>
-                            <input type="text" class="form-control" id="name" name="name">
+                            <input type="text" class="form-control" id="name" name="name" required>
                         </div>
                         <div class="form-group mb-3">
                             <label for="badge_no">Badge No</label>
@@ -198,68 +170,148 @@
                         </div>
                         <div class="form-group mb-3">
                             <label for="email">Employee Email</label>
-                            <input type="email" class="form-control" id="email" name="email">
+                            <input type="email" class="form-control" id="email" name="email" required>
                         </div>
                         <div class="form-group mb-3">
-                            <label for="hod">Hod Email</label>
-                            <input type="hod" class="form-control" id="hod" name="hod" disabled>
+                            <label for="hod">HOD Email</label>
+                            <input type="email" class="form-control" id="hod" name="hod" disabled>
                         </div>
                         <div class="form-group mb-3">
-                            <label>Dept Name</label>
-                            <select name="deptList_id" id="dept" class="form-control">
+                            <label for="deptList_id">Department</label>
+                            <select class="form-control" id="deptList_id" name="deptList_id" required>
+                                <option value="">Select Department</option>
+                                @foreach ($deptList as $dl)
+                                    <option value="{{ $dl->id }}">{{ $dl->dept_name }}</option>
+                                @endforeach
                             </select>
                         </div>
                         <div class="form-group mb-3">
                             <label for="role">Role</label>
-                            <select name="role" id="role" class="form-control">
+                            <select class="form-control" id="role" name="role" required>
                                 <option value="hod">HOD | PIC</option>
-                                <option value="hod2">HOD | GatePass Approval</option>
                                 <option value="regular">Clerk | Regular</option>
-                                <option value="security">Security | Regular</option>
+                                <option value="purchasing">Purchase Dept | Purchasing</option>
+                                <option value="security">Security | Security</option>
                             </select>
                         </div>
-                        <div class="modal-footer">
-                            <button type="submit" class="btn btn-success btn-block">Save Changes</button>
+                        <div class="form-group mb-3">
+                            <label for="status">Status</label>
+                            <select class="form-control" id="status" name="status" required>
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                            </select>
                         </div>
                     </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success btn-block" form="editForm">Save Changes</button>
+                    <button type="button" class="btn btn-secondary btn-block" data-bs-dismiss="modal">Cancel</button>
                 </div>
             </div>
         </div>
     </div>
-    {{-- End Of Edit Modal --}}
 
+    <!-- View User Modal -->
+    <div class="modal fade" id="viewModal" tabindex="-1" aria-labelledby="viewModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewModalLabel">User Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <tbody>
+                                <tr>
+                                    <th>Name</th>
+                                    <td id="viewName"></td>
+                                </tr>
+                                <tr>
+                                    <th>Badge No</th>
+                                    <td id="viewBadgeNo"></td>
+                                </tr>
+                                <tr>
+                                    <th>Email</th>
+                                    <td id="viewEmail"></td>
+                                </tr>
+                                <tr>
+                                    <th>Department</th>
+                                    <td id="viewDept"></td>
+                                </tr>
+                                <tr>
+                                    <th>HOD</th>
+                                    <td id="viewHod"></td>
+                                </tr>
+                                <tr>
+                                    <th>Role</th>
+                                    <td id="viewRole"></td>
+                                </tr>
+                                <tr>
+                                    <th>Status</th>
+                                    <td id="viewStatus"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-
-
-
-
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete this user? This action cannot be undone.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancelDelete">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('page-vendors-scripts')
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    {{-- <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script> --}}
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.colVis.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         $(document).ready(function() {
-            $("#example").DataTable(), $("#datatable-buttons").DataTable({
-                lengthChange: !1,
+            // Initialize DataTable
+            $("#example").DataTable({
+                lengthChange: false,
                 buttons: ["copy", "excel", "pdf", "colvis"]
-            }).buttons().container().appendTo("#datatable-buttons_wrapper .col-md-6:eq(0)"), $(
-                ".dataTables_length select").addClass("form-select form-select-sm")
-        });
-    </script>
+            }).buttons().container().appendTo("#example_wrapper .col-md-6:eq(0)");
+            $(".dataTables_length select").addClass("form-select form-select-sm");
 
-    <script>
-        jQuery(document).ready(function($) {
-
-            $.noConflict();
-
-            // Save Changes / Update Button
-            $('#submitRequest').click(function() {
-                console.log('saveMaterial');
+            // Create Account
+            $('#submitRequest').on('click', function(e) {
+                e.preventDefault();
+                console.log('Create button clicked');
                 var formData = $('#createAccountForm').serialize();
+                console.log('Create form data:', formData);
 
                 $.ajaxSetup({
                     headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                     }
                 });
 
@@ -267,169 +319,196 @@
                     url: '/account',
                     method: 'POST',
                     data: formData,
+                    beforeSend: function() {
+                        console.log('Sending create request');
+                    },
                     success: function(response) {
+                        console.log('Create success:', response);
                         Swal.fire({
                             icon: 'success',
                             title: 'Success',
-                            text: 'New account successfully added'
+                            text: response.message
                         }).then(function() {
+                            $('#createAccountModal').modal('hide');
                             location.reload();
-                        });;;
+                        });
                     },
-                    error: function(xhr, status, error) {
+                    error: function(xhr) {
+                        console.error('Create error:', xhr.responseText);
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: 'Failed to add new account'
+                            text: xhr.responseJSON?.error || 'Failed to add new account'
                         });
                     }
                 });
             });
 
-            // Delete Confirmation Modal & Button
-            document.addEventListener('DOMContentLoaded', function() {
-                var modal = document.getElementById('deleteModal');
-
-                var deleteButtons = document.querySelectorAll('.delete-btn');
-
-                var userId;
-
-                deleteButtons.forEach(function(button) {
-                    button.addEventListener('click', function() {
-                        userId = button.getAttribute('data-user-id');
-                        modal.style.display = 'block';
-                    });
-                });
-
-                // Delete
-                var confirmDeleteBtn = document.getElementById('confirmDelete');
-
-                confirmDeleteBtn.addEventListener('click', function() {
-                    modal.style.display = 'none';
-                    deleteItem(userId);
-                });
-
-                // Cancel
-                var cancelDeleteBtn = document.getElementById('cancelDelete');
-
-                cancelDeleteBtn.addEventListener('click', function() {
-                    modal.style.display = 'none';
-                });
-
-                function deleteItem(userId) {
-                    $.ajaxSetup({
-                        headers: {
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                        }
-                    });
-                    $.ajax({
-                        url: '/account/' + userId,
-                        method: 'DELETE',
-                        success: function(response) {
-                            Swal.fire('Success', 'User deleted', 'success').then(function() {
-                                location.reload();
-                            });;;
-                        },
-                        error: function(xhr, status, error) {
-                            Swal.fire('Error', 'User delete failed', 'error');
-                        }
-                    });
-                }
-            });
-
-
-            // Handle click event on the button
-            $('.updateBtn').click(function() {
+            // Update Account
+            $('.updateBtn').on('click', function() {
+                console.log('Update button clicked');
                 var requestId = $(this).data('request-id');
+                console.log('User ID:', requestId);
 
-                // Fetch data using AJAX
                 $.ajax({
-                    url: '/get-user-details/' +
-                        requestId, // Assuming this route exists in your Laravel routes
+                    url: '/get-user-details/' + requestId,
                     type: 'GET',
+                    beforeSend: function() {
+                        console.log('Fetching user details for ID:', requestId);
+                    },
                     success: function(response) {
-                        // Populate modal form fields with fetched data
+                        console.log('Response:', response);
+                        $('#userId').val(response.user.id);
                         $('#name').val(response.user.name);
                         $('#email').val(response.user.email);
                         $('#badge_no').val(response.user.badge_no);
                         $('#role').val(response.user.role);
-                        $('#hod').val(response.hod);
-                        var select = document.getElementById("dept");
+                        $('#status').val(response.user.status || 'Active');
+                        $('#hod').val(response.hod || 'N/A');
+                        var select = $('#deptList_id');
+                        select.empty(); // Clear previous options
+                        select.append('<option value="">Select Department</option>');
                         response.dept_list.forEach(function(dept) {
-                            var option = document.createElement("option");
-                            option.text = dept.dept_name;
-                            option.value = dept.id;
-                            if (dept.id === response.user.deptList_id) {
-                                option.selected =
-                                    true; // Set this option as selected if it matches the default department ID
-                            }
-                            select.add(option);
+                            var selected = dept.id === response.user.dept_id ? 'selected' : '';
+                            select.append(`<option value="${dept.id}" ${selected}>${dept.dept_name}</option>`);
                         });
-                        document.addEventListener('DOMContentLoaded', function() {
-                            const roleSelect = document.getElementById('role');
-                            const userRole = response.user.role;
-                            console.log(response.user.role);
-                            // Set the value of the select element to match the user's role
-                            if (roleSelect) {
-                                roleSelect.value = userRole;
-                            }
-                        });
-
-                        // Show the modal
                         $('#editModal').modal('show');
                     },
-                    error: function(xhr, status, error) {
-                        // Handle errors
-                        console.error(xhr.responseText);
+                    error: function(xhr) {
+                        console.error('Error fetching user:', xhr.responseText);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: xhr.responseJSON?.error || 'Failed to fetch user details'
+                        });
                     }
                 });
             });
 
-            // Handle form submission
-            $('#editForm').submit(function(event) {
-                event.preventDefault();
-
-                // Get form data
+            $('#editForm').on('submit', function(e) {
+                e.preventDefault();
+                console.log('Edit form submitted');
                 var formData = $(this).serialize();
+                console.log('Edit form data:', formData);
 
                 $.ajaxSetup({
                     headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                     }
                 });
 
-                // Submit form using AJAX
                 $.ajax({
-                    url: '/update-user-details/', // Assuming this route exists in your Laravel routes
+                    url: '/update-user-details',
                     type: 'POST',
                     data: formData,
+                    beforeSend: function() {
+                        console.log('Sending update request');
+                    },
                     success: function(response) {
+                        console.log('Update success:', response);
                         Swal.fire({
                             icon: 'success',
-                            title: 'Success!',
-                            text: response.message,
-                            timer: 2000, // Auto close after 2 seconds
-                            showConfirmButton: false
+                            title: 'Success',
+                            text: response.message
                         }).then(function() {
-                            // Optionally close modal or redirect
                             $('#editModal').modal('hide');
+                            location.reload();
                         });
                     },
-                    error: function(xhr, status, error) {
-                        // Handle errors
-                        console.error(xhr.responseText);
+                    error: function(xhr) {
+                        console.error('Update error:', xhr.responseText);
                         Swal.fire({
                             icon: 'error',
-                            title: 'Error...',
-                            text: 'Something went wrong!',
+                            title: 'Error',
+                            text: xhr.responseJSON?.error || 'Failed to update account'
                         });
                     }
                 });
             });
+
+            // View User Details
+            $('.viewBtn').on('click', function() {
+                console.log('View button clicked');
+                var userId = $(this).data('view-id');
+                console.log('User ID for view:', userId);
+
+                $.ajax({
+                    url: '/get-user-details/' + userId,
+                    type: 'GET',
+                    beforeSend: function() {
+                        console.log('Fetching user details for view:', userId);
+                    },
+                    success: function(response) {
+                        console.log('View response:', response);
+                        $('#viewName').text(response.user.name);
+                        $('#viewBadgeNo').text(response.user.badge_no);
+                        $('#viewEmail').text(response.user.email);
+                        $('#viewDept').text(response.dept ? response.dept.dept_name : 'N/A');
+                        $('#viewHod').text(response.hod || 'N/A');
+                        $('#viewRole').text(response.user.role);
+                        $('#viewStatus').text(response.user.status || 'Active');
+                        $('#viewModal').modal('show');
+                    },
+                    error: function(xhr) {
+                        console.error('Error fetching user for view:', xhr.responseText);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: xhr.responseJSON?.error || 'Failed to load user details'
+                        });
+                    }
+                });
+            });
+
+            // Delete User
+            let userIdToDelete;
+            $('.delete-btn').on('click', function() {
+                console.log('Delete button clicked');
+                userIdToDelete = $(this).data('user-id');
+                console.log('User ID to delete:', userIdToDelete);
+                $('#deleteModal').modal('show');
+            });
+
+            $('#confirmDelete').on('click', function() {
+                console.log('Confirm delete clicked');
+                $.ajaxSetup({
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    }
+                });
+
+                $.ajax({
+                    url: '/account/' + userIdToDelete,
+                    method: 'DELETE',
+                    beforeSend: function() {
+                        console.log('Sending delete request for ID:', userIdToDelete);
+                    },
+                    success: function(response) {
+                        console.log('Delete success:', response);
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: response.message
+                        }).then(function() {
+                            $('#deleteModal').modal('hide');
+                            location.reload();
+                        });
+                    },
+                    error: function(xhr) {
+                        console.error('Delete error:', xhr.responseText);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: xhr.responseJSON?.error || 'Failed to delete user'
+                        });
+                    }
+                });
+            });
+
+            $('#cancelDelete').on('click', function() {
+                console.log('Cancel delete clicked');
+                $('#deleteModal').modal('hide');
+            });
         });
     </script>
-
-
-
-
 @endsection
