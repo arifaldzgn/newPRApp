@@ -33,80 +33,6 @@
                     <span class="bx bx-search-alt"></span>
                 </div>
             </form>
-
-            {{-- <div class="dropdown dropdown-mega d-none d-lg-block ms-2">
-                <button type="button" class="btn header-item waves-effect" data-bs-toggle="dropdown" aria-haspopup="false" aria-expanded="false">
-                    <span key="t-megamenu">Mega Menu</span>
-                    <i class="mdi mdi-chevron-down"></i> 
-                </button>
-                <div class="dropdown-menu dropdown-megamenu">
-                    <div class="row">
-                        <div class="col-sm-8">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <h5 class="font-size-14" key="t-ui-components">UI Components</h5>
-                                    <ul class="list-unstyled megamenu-list">
-                                        <li><a href="javascript:void(0);" key="t-lightbox">Lightbox</a></li>
-                                        <li><a href="javascript:void(0);" key="t-range-slider">Range Slider</a></li>
-                                        <li><a href="javascript:void(0);" key="t-sweet-alert">Sweet Alert</a></li>
-                                        <li><a href="javascript:void(0);" key="t-rating">Rating</a></li>
-                                        <li><a href="javascript:void(0);" key="t-forms">Forms</a></li>
-                                        <li><a href="javascript:void(0);" key="t-tables">Tables</a></li>
-                                        <li><a href="javascript:void(0);" key="t-charts">Charts</a></li>
-                                    </ul>
-                                </div>
-
-                                <div class="col-md-4">
-                                    <h5 class="font-size-14" key="t-applications">Applications</h5>
-                                    <ul class="list-unstyled megamenu-list">
-                                        <li><a href="javascript:void(0);" key="t-ecommerce">Ecommerce</a></li>
-                                        <li><a href="javascript:void(0);" key="t-calendar">Calendar</a></li>
-                                        <li><a href="javascript:void(0);" key="t-email">Email</a></li>
-                                        <li><a href="javascript:void(0);" key="t-projects">Projects</a></li>
-                                        <li><a href="javascript:void(0);" key="t-tasks">Tasks</a></li>
-                                        <li><a href="javascript:void(0);" key="t-contacts">Contacts</a></li>
-                                    </ul>
-                                </div>
-
-                                <div class="col-md-4">
-                                    <h5 class="font-size-14" key="t-extra-pages">Extra Pages</h5>
-                                    <ul class="list-unstyled megamenu-list">
-                                        <li><a href="javascript:void(0);" key="t-light-sidebar">Light Sidebar</a></li>
-                                        <li><a href="javascript:void(0);" key="t-compact-sidebar">Compact Sidebar</a></li>
-                                        <li><a href="javascript:void(0);" key="t-horizontal">Horizontal layout</a></li>
-                                        <li><a href="javascript:void(0);" key="t-maintenance">Maintenance</a></li>
-                                        <li><a href="javascript:void(0);" key="t-coming-soon">Coming Soon</a></li>
-                                        <li><a href="javascript:void(0);" key="t-timeline">Timeline</a></li>
-                                        <li><a href="javascript:void(0);" key="t-faqs">FAQs</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-sm-4">
-                            <div class="row">
-                                <div class="col-sm-6">
-                                    <h5 class="font-size-14" key="t-ui-components">UI Components</h5>
-                                    <ul class="list-unstyled megamenu-list">
-                                        <li><a href="javascript:void(0);" key="t-lightbox">Lightbox</a></li>
-                                        <li><a href="javascript:void(0);" key="t-range-slider">Range Slider</a></li>
-                                        <li><a href="javascript:void(0);" key="t-sweet-alert">Sweet Alert</a></li>
-                                        <li><a href="javascript:void(0);" key="t-rating">Rating</a></li>
-                                        <li><a href="javascript:void(0);" key="t-forms">Forms</a></li>
-                                        <li><a href="javascript:void(0);" key="t-tables">Tables</a></li>
-                                        <li><a href="javascript:void(0);" key="t-charts">Charts</a></li>
-                                    </ul>
-                                </div>
-
-                                <div class="col-sm-5">
-                                    <div>
-                                        <img src="{{ asset('assets/images/megamenu-img.png') }}" alt="" class="img-fluid mx-auto d-block">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div> --}}
         </div>
 
         <div class="d-flex">
@@ -132,90 +58,6 @@
                 </div>
             </div>
 
-            {{-- <div class="dropdown d-inline-block">
-                <button type="button" class="btn header-item waves-effect"
-                data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <img id="header-lang-img" src="{{ asset('assets/images/flags/us.jpg') }}" alt="Header Language" height="16">
-                </button>
-                <div class="dropdown-menu dropdown-menu-end">
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item language" data-lang="en">
-                        <img src="{{ asset('assets/images/flags/us.jpg') }}" alt="user-image" class="me-1" height="12"> <span class="align-middle">English</span>
-                    </a>
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item language" data-lang="sp">
-                        <img src="{{ asset('assets/images/flags/spain.jpg') }}" alt="user-image" class="me-1" height="12"> <span class="align-middle">Spanish</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item language" data-lang="gr">
-                        <img src="{{ asset('assets/images/flags/germany.jpg') }}" alt="user-image" class="me-1" height="12"> <span class="align-middle">German</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item language" data-lang="it">
-                        <img src="{{ asset('assets/images/flags/italy.jpg') }}" alt="user-image" class="me-1" height="12"> <span class="align-middle">Italian</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item language" data-lang="ru">
-                        <img src="{{ asset('assets/images/flags/russia.jpg') }}" alt="user-image" class="me-1" height="12"> <span class="align-middle">Russian</span>
-                    </a>
-                </div>
-            </div> --}}
-
-            {{-- <div class="dropdown d-none d-lg-inline-block ms-1">
-                <button type="button" class="btn header-item noti-icon waves-effect"
-                data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <i class="bx bx-customize"></i>
-                </button>
-                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
-                    <div class="px-lg-2">
-                        <div class="row g-0">
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="{{ asset('assets/images/brands/github.png') }}" alt="Github">
-                                    <span>GitHub</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="{{ asset('assets/images/brands/bitbucket.png') }}" alt="bitbucket">
-                                    <span>Bitbucket</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="{{ asset('assets/images/brands/dribbble.png') }}" alt="dribbble">
-                                    <span>Dribbble</span>
-                                </a>
-                            </div>
-                        </div>
-
-                        <div class="row g-0">
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="{{ asset('assets/images/brands/dropbox.png') }}" alt="dropbox">
-                                    <span>Dropbox</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="{{ asset('assets/images/brands/mail_chimp.png') }}" alt="mail_chimp">
-                                    <span>Mail Chimp</span>
-                                </a>
-                            </div>
-                            <div class="col">
-                                <a class="dropdown-icon-item" href="#">
-                                    <img src="{{ asset('assets/images/brands/slack.png') }}" alt="slack">
-                                    <span>Slack</span>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div> --}}
-
             <div class="dropdown d-none d-lg-inline-block ms-1">
                 <button type="button" class="btn header-item noti-icon waves-effect" data-bs-toggle="fullscreen">
                     <i class="bx bx-fullscreen"></i>
@@ -224,8 +66,7 @@
 
             <!-- In includes/header.blade.php -->
             <div class="dropdown d-inline-block">
-                <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-notifications-dropdown"
-                    data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <button type="button" class="btn header-item noti-icon waves-effect" id="page-header-notifications-dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="bx bx-bell bx-tada"></i>
                     <span class="badge bg-danger rounded-pill" id="notification-count">0</span>
                 </button>
@@ -287,97 +128,12 @@
                     </a>
                 </div>
             </div>
-            {{-- 
-            <div class="dropdown d-inline-block">
-                <button type="button" class="btn header-item noti-icon right-bar-toggle waves-effect">
-                    <i class="bx bx-cog bx-spin"></i>
-                </button>
-            </div> --}}
         </div>
     </div>
 </header>
 
 @section('page-vendors-scripts')
  <script>
-        $(document).ready(function() {
-            function loadNotifications() {
-                $.ajax({
-                    url: '{{ route("notifications.fetch") }}',
-                    method: 'GET',
-                    data: { _token: '{{ csrf_token() }}' },
-                    success: function(response) {
-                        console.log('Response:', response); // Debug response
-                        $('#notification-count').text(response.count || 0);
-                        $('#notification-content').html(response.html || '<p class="p-3 text-center">No new notifications.</p>');
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error:', error); // Debug errors
-                        $('#notification-count').text('0');
-                        $('#notification-content').html('<p class="p-3 text-center">Failed to load notifications.</p>');
-                    }
-                });
-            }
-
-            // Load notifications on page load
-            loadNotifications();
-
-            // Refresh every 30 seconds
-            setInterval(loadNotifications, 30000);
-
-            // Mark as read and navigate on click
-            $(document).on('click', '.notification-item', function(e) {
-                e.preventDefault(); // Prevent default navigation
-                e.stopPropagation(); // Prevent dropdown from closing
-                let $link = $(this);
-                let id = $link.data('id');
-                console.log('Clicked notification ID:', id); // Debug click
-
-                // Disable the link temporarily to prevent multiple clicks
-                $link.addClass('disabled');
-
-                $.ajax({
-                    url: '{{ route("notifications.read") }}',
-                    method: 'POST',
-                    data: { id: id, _token: '{{ csrf_token() }}' },
-                    success: function() {
-                        console.log('Marked as read:', id); // Debug success
-                        loadNotifications(); // Update count and content
-                        // Navigate after a short delay to ensure UI update
-                        setTimeout(function() {
-                            window.location.href = $link.attr('href');
-                        }, 100);
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Read error:', error); // Debug read errors
-                        $link.removeClass('disabled'); // Re-enable if error
-                    },
-                    complete: function() {
-                        $link.removeClass('disabled'); // Re-enable after request
-                    }
-                });
-            });
-
-            // Initialize Bootstrap dropdown
-            var dropdownElement = document.getElementById('page-header-notifications-dropdown');
-            if (dropdownElement) {
-                new bootstrap.Dropdown(dropdownElement, {
-                    autoClose: false // Prevent auto-close on click inside
-                });
-            }
-
-            // Ensure sidebar menu initialization (your existing code)
-            document.addEventListener("DOMContentLoaded", function() {
-                document.querySelectorAll("#side-menu .mm-active").forEach(function(activeItem) {
-                    let parent = activeItem.closest("ul.sub-menu");
-                    if (parent) {
-                        parent.classList.add("mm-show");
-                        let parentLink = parent.previousElementSibling;
-                        if (parentLink) {
-                            parentLink.classList.add("mm-active");
-                        }
-                    }
-                });
-            });
-        });
+       
     </script>
 @endsection

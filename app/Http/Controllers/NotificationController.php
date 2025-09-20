@@ -26,7 +26,7 @@ class NotificationController extends Controller
             $html .= '<div class="d-flex">';
             $html .= '<div class="avatar-xs me-3">';
             $html .= '<span class="avatar-title bg-' . ($notification->status === 'Approved' ? 'success' : ($notification->status === 'Rejected' ? 'danger' : 'primary')) . ' rounded-circle font-size-16">';
-            $html .= '<i class="bx bx-cart"></i>';
+            $html .= '<i class="bx bx-file"></i>'; 
             $html .= '</span>';
             $html .= '</div>';
             $html .= '<div class="flex-grow-1">';

@@ -60,4 +60,14 @@ class prTicket extends Model
             'new_data' => json_encode($newData),
         ]);
     }
+
+    public function requester()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_user_id');
+    }
 }

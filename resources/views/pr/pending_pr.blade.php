@@ -18,7 +18,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h4 class="card-title mb-0">Your Requested Items</h4>
-                        <button type="button" class="btn btn-success waves-effect btn-label waves-light"
+                        <button type="button" class="btn btn-success waves-effect btn-label waves-light d-none"
                             data-bs-toggle="modal" data-bs-target="#createPR">
                             <i class="bx bx-check-double label-icon"></i> Create
                         </button>
@@ -81,9 +81,9 @@
 @endsection
 
 @section('page-vendors-scripts')
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    {{-- <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> --}}
 
     <script>
         $(document).ready(function() {

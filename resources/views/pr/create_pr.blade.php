@@ -121,10 +121,11 @@
 
 @section('page-vendors-scripts')
     <!-- Add any page-specific scripts here -->
-
+    
 
 
     <script>
+        console.log('jQuery loaded:', typeof $ !== 'undefined' ? 'Yes' : 'No');
         $(document).ready(function() {
             $("#datatable").DataTable(), $("#datatable-buttons").DataTable({
                 lengthChange: !1,
@@ -203,7 +204,7 @@
             var arrayCount = 1;
             var itemCount = 2;
 
-            $.noConflict();
+            // $.noConflict();
 
             function initializeSelectpicker($el) {
                 $el.selectpicker();

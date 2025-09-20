@@ -228,18 +228,28 @@ class PRController extends Controller
 
     public function show($id)
     {
+        $ticket = prTicket::findOrFail($id); // Use findOrFail for better error handling
         $ticketRequests = prRequest::where('ticket_id', $id)->get();
-        $ticket = prTicket::find($id);
-        if($ticket->advance_cash){
-            $aC = $ticket->advance_cash;
-        }else{
-            $aC = 0;
-        }
+        $advanceCash = $ticket->advance_cash ?? 0;
+
+        // Fetch user names
+        $requester = User::find($ticket->user_id);
+        $approver = $ticket->approved_user_id ? User::find($ticket->approved_user_id) : null;
 
         return response()->json([
-            // 'stock' => $ticketRequests->partList->,
-            'advance_cash' => $aC,
-            'pr_requests' => $ticketRequests
+            'advance_cash' => $advanceCash,
+            'pr_requests' => $ticketRequests,
+            'requester_name' => $requester ? $requester->name : 'Unknown',
+            'approver_name' => $approver ? $approver->name : 'None',
+            'ticket' => [
+                'ticketCode' => $ticket->ticketCode,
+                'status' => $ticket->status,
+                'reason_reject' => $ticket->reason_reject,
+                'date_approval' => $ticket->date_approval,
+                'date_checked' => $ticket->date_checked,
+                'created_at' => $ticket->created_at,
+                'updated_at' => $ticket->updated_at,
+            ]
         ]);
     }
 

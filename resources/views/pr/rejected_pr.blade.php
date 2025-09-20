@@ -19,7 +19,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h4 class="card-title mb-0">Your Rejected Tickets</h4>
-                        <button type="button" class="btn btn-success waves-effect btn-label waves-light"
+                        <button type="button" class="btn btn-success waves-effect btn-label waves-light d-none"
                             data-bs-toggle="modal" data-bs-target="#createPR">
                             <i class="bx bx-check-double label-icon"></i> Create
                         </button>
@@ -89,7 +89,7 @@
         });
 
         jQuery(document).ready(function($) {
-            $.noConflict();
+            // $.noConflict();
 
             // Submit Request
             $('#submitRequest').click(function() {
