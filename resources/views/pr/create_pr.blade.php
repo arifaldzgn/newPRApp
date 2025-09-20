@@ -105,14 +105,15 @@
                 {{-- <button type="submit" class="btn btn-primary btn-block">Submit Request 2</button> --}}
                 </form>
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-success btn-block" id="submitRequest" disabled>Submit
-                        Request</button>
+                    <button type="submit" class="btn btn-success btn-block" id="submitRequest" disabled>Submit Request</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
 
                 </div>
             </div>
         </div>
     </div>
+
+    <div id="loadingSpinner" style="display: none; text-align: center;">Loading...</div>
     {{-- Modal End --}}
 
     <!-- end:: Content -->
@@ -137,25 +138,63 @@
         jQuery(document).ready(function($) {
 
             $('#submitRequest').click(function() {
-                var formData = $('#createPrForm').serialize();
+                var $button = $(this);
+                $button.prop('disabled', true).text('Submitting...');
+                $('#loadingSpinner').show();
 
-                $.ajaxSetup({
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                var formData = $('#createPrForm').serializeArray();
+                var prRequests = [];
+
+                formData.forEach(function(item) {
+                    if (item.name.match(/pr_request\[(\d+)\]\[(.*)\]/)) {
+                        var index = parseInt(RegExp.$1);
+                        var field = RegExp.$2;
+                        if (!prRequests[index]) prRequests[index] = {};
+                        prRequests[index][field] = item.value;
                     }
                 });
 
+                // Remove empty or undefined entries
+                prRequests = prRequests.filter(item => item && Object.keys(item).length > 0);
+              
+
                 $.ajax({
-                    url: '/ticket',
+                    url: '{{ route('validate.stock') }}',
                     method: 'POST',
-                    data: formData,
-                    success: function(response) {
-                        Swal.fire('Success', response.message, 'success').then(function() {
-                            location.reload();
-                        });;
+                    data: { pr_request: prRequests },
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     },
-                    error: function(xhr, status, error) {
-                        Swal.fire('Error', xhr.responseJSON.error, 'error');
+                    success: function(response) {
+                        if (response.valid) {
+                            $.ajax({
+                                url: '/ticket',
+                                method: 'POST',
+                                data: $('#createPrForm').serialize(),
+                                headers: {
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                },
+                                success: function(response) {
+                                    Swal.fire('Success', response.message, 'success').then(function() {
+                                        location.reload();
+                                    });
+                                },
+                                error: function(xhr) {
+                                    $button.prop('disabled', false).text('Submit Request');
+                                    $('#loadingSpinner').hide();
+                                    Swal.fire('Error', xhr.responseJSON?.error || 'Failed to create request', 'error');
+                                }
+                            });
+                        } else {
+                            $button.prop('disabled', false).text('Submit Request');
+                            $('#loadingSpinner').hide();
+                            Swal.fire('Error', response.error, 'error');
+                        }
+                    },
+                    error: function(xhr) {
+                        $button.prop('disabled', false).text('Submit Request');
+                        $('#loadingSpinner').hide();
+                        Swal.fire('Error', xhr.responseJSON?.error || 'Failed to validate stock', 'error');
                     }
                 });
             });
@@ -278,20 +317,76 @@
             });
 
             $(document).on('input', '.qty-input', function() {
-                var qty = $(this).val();
+                var qty = parseInt($(this).val());
                 var arrayCount = $(this).data('array-count');
-                var requiresStockReduction = $(
-                    `input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val();
+                var requiresStockReduction = $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val();
 
-                if (requiresStockReduction !== "false" && qty > parseInt(requiresStockReduction)) {
+                if (requiresStockReduction !== "false" && (isNaN(qty) || qty <= 0)) {
                     Swal.fire({
                         icon: 'error',
-                        title: 'Exceeds Available Stock',
-                        text: `The quantity cannot exceed the available stock of ${requiresStockReduction}.`
+                        title: 'Invalid Quantity',
+                        text: 'Quantity must be a positive number.'
                     });
-                    $(this).val(''); // Clear the invalid input
+                    $(this).val('');
+                    return;
+                }
+
+                if (requiresStockReduction !== "false") {
+                    var stock = parseInt(requiresStockReduction);
+                    if (stock <= 0) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'No Stock Available',
+                            text: 'The selected part has no available stock.'
+                        });
+                        $(this).val('');
+                        return;
+                    }
+                    if (qty > stock) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Exceeds Available Stock',
+                            text: `The quantity cannot exceed the available stock of ${stock}.`
+                        });
+                        $(this).val('');
+                    }
                 }
             });
+
+            $(document).on('change', '.selectpicker', function() {
+                var partName = $(this).val();
+                var arrayCount = $(this).attr('data-array-count');
+                fillOtherFields(partName, arrayCount);
+            });
+
+            function fillOtherFields(partName, arrayCount) {
+                $.ajax({
+                    url: '{{ route('retrieve.part.details') }}',
+                    method: 'GET',
+                    data: { partName: partName },
+                    success: function(data) {
+                        $(`input[name="pr_request[${arrayCount}][UoM]"]`).val(data.part.UoM);
+                        $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val(data.stock);
+                        $(`input[name="pr_request[${arrayCount}][category]"]`).val(data.part.category);
+                        $(`textarea[name="pr_request[${arrayCount}][type]"]`).val(data.part.type);
+                        $(`input[name="pr_request[${arrayCount}][partlist_id]"]`).val(data.part.id);
+                        $(`input[name="pr_request[${arrayCount}][part_name]"]`).val(data.part.name);
+
+                        // Warn if stock is invalid
+                        if (data.stock !== "false" && parseInt(data.stock) <= 0) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'No Stock Available',
+                                text: `The part ${data.part.name} has no available stock.`
+                            });
+                        }
+                    },
+                    error: function(xhr) {
+                        console.error('Error fetching part details:', xhr.responseJSON?.error || xhr.statusText);
+                        Swal.fire('Error', 'Failed to retrieve part details', 'error');
+                    }
+                });
+            }
 
             initializeSelectpicker();
         });

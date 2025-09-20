@@ -8,6 +8,8 @@ use App\Models\assetCode;
 use App\Models\PartStock;
 use App\Models\prRequest;
 use App\Models\PrLogHistory;
+use Illuminate\Support\Facades\Log;
+
 
 class PartListController extends Controller
 {
@@ -50,9 +52,12 @@ class PartListController extends Controller
                 PartStock::create([
                     'part_list_id' => $partListId,
                     'quantity' => $request->stocks,
-                    'source' => 'Part Created',
-                    'operations' => 'plus'
+                    'source' => 'Initial Stock Entry',
+                    'operations' => 'plus',
+                    'source_type' => 'System', // or 'Initialization'
+                    'source_ref' => auth()->id(), // or null
                 ]);
+
 
             }else{
                 partList::create([
@@ -166,18 +171,75 @@ class PartListController extends Controller
 
         $operation = $validatedData['quantity'] >= 0 ? 'plus' : 'minus';
         if($operation == 'plus'){
-            $source = 'Master Stock';
+            $source = 'Manual Adjustment';
         }else{
-            $source = 'Master Stock';
+            $source = 'Manual Adjustment';
         }
 
         $part->PartStock()->create([
             'quantity' => abs($validatedData['quantity']),
             'operations' => $operation,
-            'source' => $source
+            'source' => $source,
+            'source_type' => 'Manual Update',
+            'source_ref' => auth()->id(),
         ]);
 
         return response()->json(['message' => 'Part details updated successfully']);
+    }
+
+    protected function getCurrentStock($partId)
+    {
+        $part = partList::findOrFail($partId);
+        if ($part->requires_stock_reduction === 'false') {
+            return 'false';
+        }
+
+        $stock = $part->PartStock->where('operations', 'plus')->sum('quantity') - 
+                 $part->PartStock->where('operations', 'minus')->sum('quantity');
+        $stock = $stock >= 0 ? $stock : 0; // Prevent negative stock
+
+        // Sync requires_stock_reduction
+        if ($part->requires_stock_reduction !== $stock) {
+            $part->requires_stock_reduction = $stock;
+            $part->save();
+            Log::info('Synced requires_stock_reduction', ['part_id' => $partId, 'new_stock' => $stock]);
+        }
+
+        return $stock;
+    }
+
+    public function validateStock(Request $request)
+    {
+        try {
+            $prRequests = $request->input('pr_request', []);
+            Log::info('Validating stock', ['prRequests' => $prRequests]);
+
+            foreach ($prRequests as $index => $prQ) {
+                $part = partList::findOrFail($prQ['partlist_id']);
+                $qty = (int) $prQ['qty'];
+
+                $currentStock = $this->getCurrentStock($part->id);
+                Log::info('Stock validation', ['part_id' => $part->id, 'qty' => $qty, 'currentStock' => $currentStock]);
+
+                if ($currentStock !== 'false' && is_numeric($currentStock)) {
+                    if ($qty > (int) $currentStock) {
+                        return response()->json([
+                            'valid' => false,
+                            'error' => "Insufficient stock for part: {$part->part_name} (ID: {$part->id}). Requested: {$qty}, Available: {$currentStock}"
+                        ], 422);
+                    }
+                }
+            }
+
+            return response()->json(['valid' => true]);
+        } catch (Exception $e) {
+            Log::error('Stock validation error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all(),
+            ]);
+            return response()->json(['valid' => false, 'error' => 'Failed to validate stock'], 500);
+        }
     }
 
     public function log()
