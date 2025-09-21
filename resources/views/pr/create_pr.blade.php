@@ -77,20 +77,16 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <!--  -->
                     <div class="container">
                         <form id="createPrForm" method="POST" action="">
                             <div class="card mb-3 card-body border border-primary">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" role="switch"
-                                        id="flexSwitchCheckDefault">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDefault">
                                     <label>Enable advance cash</label>
                                 </div>
                                 <div class="form-group">
-                                    <input type="number" id="cashAdvance" class="form-control" name="advance_cash"
-                                        disabled>
-                                    <small class="form-text text-muted">This will refer to the total amount of this
-                                        PR</small>
+                                    <input type="number" id="cashAdvance" class="form-control" name="advance_cash" value="0" disabled>
+                                    <small class="form-text text-muted">Optional. This will refer to the total amount of this PR (default: 0).</small>
                                 </div>
                             </div>
                             <div id="prRequestForm">
@@ -102,12 +98,10 @@
                         <button class="btn btn-primary btn-block" id="addItem" type="button">Add New Items</button>
                     </div>
                 </div>
-                {{-- <button type="submit" class="btn btn-primary btn-block">Submit Request 2</button> --}}
                 </form>
                 <div class="modal-footer">
                     <button type="submit" class="btn btn-success btn-block" id="submitRequest" disabled>Submit Request</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
-
                 </div>
             </div>
         </div>
@@ -137,7 +131,6 @@
 
     <script>
         jQuery(document).ready(function($) {
-
             $('#submitRequest').click(function() {
                 var $button = $(this);
                 $button.prop('disabled', true).text('Submitting...');
@@ -155,9 +148,7 @@
                     }
                 });
 
-                // Remove empty or undefined entries
                 prRequests = prRequests.filter(item => item && Object.keys(item).length > 0);
-              
 
                 $.ajax({
                     url: '{{ route('validate.stock') }}',
@@ -200,49 +191,39 @@
                 });
             });
 
-
             var arrayCount = 1;
             var itemCount = 2;
-
-            // $.noConflict();
 
             function initializeSelectpicker($el) {
                 $el.selectpicker();
             }
 
             function fillOtherFields(partName, arrayCount) {
-                // Make an AJAX request to retrieve data based on partName
                 $.ajax({
                     url: '{{ route('retrieve.part.details') }}',
                     method: 'GET',
-                    data: {
-                        partName: partName
-                    },
+                    data: { partName: partName },
                     success: function(data) {
-                        $(`input[name="pr_request[${arrayCount}][UoM]"]`).val(data.part.UoM);
-                        console.log(data.stock);
-                        console.log(arrayCount);
-                        $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val(data
-                            .stock);
-                        $(`input[name="pr_request[${arrayCount}][category]"]`).val(data.part.category);
-                        $(`textarea[name="pr_request[${arrayCount}][type]"]`).val(data.part.type);
-                        $(`input[name="pr_request[${arrayCount}][partlist_id]"]`).val(data.part.id);
+                        $(`input[name="pr_request[${arrayCount}][UoM]"]`).val(data.part.UoM || 'N/A');
+                        $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val(data.stock || '0');
+                        $(`input[name="pr_request[${arrayCount}][category]"]`).val(data.part.category || 'N/A');
+                        $(`textarea[name="pr_request[${arrayCount}][type]"]`).val(data.part.type || '');
+                        $(`input[name="pr_request[${arrayCount}][partlist_id]"]`).val(data.part.id || '');
                     },
-                    error: function(xhr, status, error) {
-                        console.error(error);
-                        // Handle error
+                    error: function(xhr) {
+                        console.error('Error fetching part details:', xhr.responseJSON?.error || xhr.statusText);
+                        Swal.fire('Error', 'Failed to retrieve part details', 'error');
                     }
                 });
             }
 
-            // Event handler for adding new item
             $("#addItem").click(function() {
                 if (arrayCount <= 5) {
                     var newItem = `
                 <div class="card card-body border border-primary">
                     <div class="mb-3">
                         <div class="form-group">
-                            <label>Part/Service Name</label>
+                            <label>Part/Service Name <span class="text-danger">*</span></label>
                             <select class="form-control selectpicker" 
                                     name="pr_request[${arrayCount}][part_name]" 
                                     data-live-search="true" 
@@ -252,41 +233,49 @@
                                     <option value="{{ $dR->id }}">{{ $dR->part_name }}</option>
                                 @endforeach
                             </select>
-                            <small id="emailHelp" class="form-text text-muted">Part/Service not available? <a href="" class="text-primary">Click here</a> to add new data.</small>
+                            <small class="form-text text-muted">Required. Part/Service not available? <a href="" class="text-primary">Click here</a> to add new data.</small>
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" for="typeNumber">Amount / 1 Item (Rp)</label>
-                        <input type="text" id="typeNumber" class="form-control" name="pr_request[${arrayCount}][amount]" />
+                        <label class="form-label" for="typeNumber">Amount / 1 Item (Rp) <span class="text-muted">(Optional)</span></label>
+                        <input type="text" id="typeNumber" class="form-control" name="pr_request[${arrayCount}][amount]" value="0">
+                        <small class="form-text text-muted">Optional. Default: 0 (will be calculated if not provided).</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" for="typeNumber">Quantity</label>
-                        <input type="number" min="1" class="form-control qty-input" name="pr_request[${arrayCount}][qty]" data-array-count="${arrayCount}" />
+                        <label class="form-label" for="typeNumber">Quantity <span class="text-danger">*</span></label>
+                        <input type="number" min="1" class="form-control qty-input" name="pr_request[${arrayCount}][qty]" data-array-count="${arrayCount}" value="1">
+                        <small class="form-text text-muted">Required. Minimum value: 1.</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Vendor</label>
-                        <input type="text" class="form-control" name="pr_request[${arrayCount}][vendor]">
+                        <label class="form-label">Vendor <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="pr_request[${arrayCount}][vendor]" value="">
+                        <small class="form-text text-muted">Required. Specify the supplier or vendor.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Stocks</label>
-                        <input type="text" class="form-control" id="requires_stock_reduction" name="pr_request[${arrayCount}][requires_stock_reduction]" value="" readonly>
+                        <input type="text" class="form-control" id="requires_stock_reduction" name="pr_request[${arrayCount}][requires_stock_reduction]" value="0" readonly>
+                        <small class="form-text text-muted">Read-only. Default: 0 (updated via stock check).</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">UoM</label>
-                        <input type="text" class="form-control" id="UoM" name="pr_request[${arrayCount}][UoM]" value="" readonly>
+                        <input type="text" class="form-control" id="UoM" name="pr_request[${arrayCount}][UoM]" value="N/A" readonly>
+                        <small class="form-text text-muted">Read-only. Default: N/A (updated via part details).</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Category</label>
-                        <input type="text" class="form-control" id="category" name="pr_request[${arrayCount}][category]" value="" readonly>
+                        <input type="text" class="form-control" id="category" name="pr_request[${arrayCount}][category]" value="N/A" readonly>
+                        <small class="form-text text-muted">Read-only. Default: N/A (updated via part details).</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Description/Others</label>
                         <textarea type="text" class="form-control" id="type" name="pr_request[${arrayCount}][type]" placeholder="Type" readonly></textarea>
+                        <small class="form-text text-muted">Read-only. Default: empty (updated via part details).</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Remark</label>
-                        <input type="text" class="form-control" name="pr_request[${arrayCount}][remark]">
-                        <input type="hidden" class="form-control" name="pr_request[${arrayCount}][partlist_id]">
+                        <label class="form-label">Remark <span class="text-muted">(Optional)</span></label>
+                        <input type="text" class="form-control" name="pr_request[${arrayCount}][remark]" value="">
+                        <small class="form-text text-muted">Optional. Add any additional notes (default: empty).</small>
+                        <input type="hidden" class="form-control" name="pr_request[${arrayCount}][partlist_id]" value="">
                         <input type="hidden" class="form-control" name="pr_request[${arrayCount}][other_cost]" value="0">
                         <input type="hidden" class="form-control" name="pr_request[${arrayCount}][tag]" value="0">
                     </div>
@@ -295,7 +284,6 @@
             `;
                     $("#prRequestForm").append(newItem);
 
-                    // Initialize only the new selectpicker (not all)
                     let $newSelect = $(`#prRequestForm select[name="pr_request[${arrayCount}][part_name]"]`);
                     $newSelect.selectpicker();
 
@@ -328,7 +316,7 @@
                         title: 'Invalid Quantity',
                         text: 'Quantity must be a positive number.'
                     });
-                    $(this).val('');
+                    $(this).val('1');
                     return;
                 }
 
@@ -340,7 +328,7 @@
                             title: 'No Stock Available',
                             text: 'The selected part has no available stock.'
                         });
-                        $(this).val('');
+                        $(this).val('1');
                         return;
                     }
                     if (qty > stock) {
@@ -349,7 +337,7 @@
                             title: 'Exceeds Available Stock',
                             text: `The quantity cannot exceed the available stock of ${stock}.`
                         });
-                        $(this).val('');
+                        $(this).val('1');
                     }
                 }
             });
@@ -366,14 +354,13 @@
                     method: 'GET',
                     data: { partName: partName },
                     success: function(data) {
-                        $(`input[name="pr_request[${arrayCount}][UoM]"]`).val(data.part.UoM);
-                        $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val(data.stock);
-                        $(`input[name="pr_request[${arrayCount}][category]"]`).val(data.part.category);
-                        $(`textarea[name="pr_request[${arrayCount}][type]"]`).val(data.part.type);
-                        $(`input[name="pr_request[${arrayCount}][partlist_id]"]`).val(data.part.id);
-                        $(`input[name="pr_request[${arrayCount}][part_name]"]`).val(data.part.name);
+                        $(`input[name="pr_request[${arrayCount}][UoM]"]`).val(data.part.UoM || 'N/A');
+                        $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val(data.stock || '0');
+                        $(`input[name="pr_request[${arrayCount}][category]"]`).val(data.part.category || 'N/A');
+                        $(`textarea[name="pr_request[${arrayCount}][type]"]`).val(data.part.type || '');
+                        $(`input[name="pr_request[${arrayCount}][partlist_id]"]`).val(data.part.id || '');
+                        $(`input[name="pr_request[${arrayCount}][part_name]"]`).val(data.part.name || '');
 
-                        // Warn if stock is invalid
                         if (data.stock !== "false" && parseInt(data.stock) <= 0) {
                             Swal.fire({
                                 icon: 'warning',
@@ -390,6 +377,7 @@
             }
 
             initializeSelectpicker();
+
         });
 
         // Show Details Material Button
@@ -454,7 +442,7 @@
                                     '<div class="mb-3">' +
                                     '<label for="materialQuantity" class="form-label">Vendor</label>' +
                                     '<input type="text" class="form-control" id="requestedVendor" name="pr_request[' +
-                                    materialCount + '][vendor]" value="' +
+                                    materialCount + '][vendor]" value="""' +
                                     pr_request.vendor + '">' +
                                     '</div>' +
                                     '<div class="mb-3">' +

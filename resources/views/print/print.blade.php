@@ -533,7 +533,7 @@
                         </div>
                         <div class="card-body">
                             <!-- Content for Acknowledged by -->
-                            <img src="../images/Etowa_none.png" alt="Your Logo" style="max-width: 130px;">
+                            <img src="../images/Etowa_none.png" alt="PR Dept" style="max-width: 130px;">
                         </div>
                     </div>
                 </div>

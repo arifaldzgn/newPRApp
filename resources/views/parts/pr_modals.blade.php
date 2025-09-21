@@ -12,30 +12,26 @@
                         <form id="createPrForm" method="POST" action="">
                             <div class="card mb-3 card-body border border-primary">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" role="switch"
-                                        id="flexSwitchCheckDefault">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDefault">
                                     <label>Enable advance cash</label>
                                 </div>
                                 <div class="form-group">
-                                    <input type="number" id="cashAdvance" class="form-control" name="advance_cash"
-                                        disabled>
-                                    <small class="form-text text-muted">This will refer to the total amount of this
-                                        PR</small>
+                                    <input type="number" id="cashAdvance" class="form-control" name="advance_cash" value="0" disabled>
+                                    <small class="form-text text-muted">Optional. This will refer to the total amount of this PR (default: 0).</small>
                                 </div>
                             </div>
                             <div id="prRequestForm">
                                 @csrf
                                 <!-- Material Request Information -->
                             </div>
-                            <div class="d-grid col-6 mx-auto">
-                                <button class="btn btn-primary btn-block" id="addItem" type="button">Add New Items</button>
-                            </div>
-                        </form>
+                    </div>
+                    <div class="d-grid col-6 mx-auto">
+                        <button class="btn btn-primary btn-block" id="addItem" type="button">Add New Items</button>
                     </div>
                 </div>
+                </form>
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-success btn-block" id="submitRequest" disabled>Submit
-                        Request</button>
+                    <button type="submit" class="btn btn-success btn-block" id="submitRequest" disabled>Submit Request</button>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>

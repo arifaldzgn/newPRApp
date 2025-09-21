@@ -1,7 +1,7 @@
 @extends('layouts.master')
 
-@section('title', 'Create PR')
-@section('description', 'Create Purchase Request page description')
+@section('title', 'Rejected PR')
+@section('description', 'Rejected Purchase Request page')
 
 @section('content')
     <!-- start:: Content -->

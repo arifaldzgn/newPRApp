@@ -18,6 +18,10 @@ class PartListController extends Controller
     public function index()
     {
         //
+        // return [
+        //     'nonStock' => partList::where('requires_stock_reduction', '=', 'false')->get(),
+        //     'stock' => partList::where('requires_stock_reduction', '!=', 'false')->get()
+        // ];
         return view('parts.create_part', [
             'nonStock' => partList::where('requires_stock_reduction', '=', 'false')->get(),
             'stock' => partList::where('requires_stock_reduction', '!=', 'false')->get()
