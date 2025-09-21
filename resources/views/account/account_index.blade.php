@@ -149,7 +149,7 @@
     </div>
 
     <!-- Edit Account Modal -->
-    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true" data-bs-backdrop="static">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
@@ -160,18 +160,9 @@
                     <form id="editForm">
                         @csrf
                         <input type="hidden" id="userId" name="id">
-                        <div class="form-group mb-3">
-                            <label for="name">Employee Name</label>
-                            <input type="text" class="form-control" id="name" name="name" required>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label for="badge_no">Badge No</label>
-                            <input type="text" class="form-control" id="badge_no" name="badge_no" readonly>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label for="email">Employee Email</label>
-                            <input type="email" class="form-control" id="email" name="email" required>
-                        </div>
+                        <div class="form-group mb-3" id="nameContainer"></div>
+                        <div class="form-group mb-3" id="badgeNoContainer"></div>
+                        <div class="form-group mb-3" id="emailContainer"></div>
                         <div class="form-group mb-3">
                             <label for="hod">HOD Email</label>
                             <input type="email" class="form-control" id="hod" name="hod" disabled>
@@ -192,6 +183,7 @@
                                 <option value="regular">Clerk | Regular</option>
                                 <option value="purchasing">Purchase Dept | Purchasing</option>
                                 <option value="security">Security | Security</option>
+                                <option value="admin">Admin</option>
                             </select>
                         </div>
                         <div class="form-group mb-3">
@@ -283,7 +275,7 @@
 @endsection
 
 @section('page-vendors-scripts')
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    {{-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script> --}}
     {{-- <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script> --}}
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
@@ -350,6 +342,19 @@
                 var requestId = $(this).data('request-id');
                 console.log('User ID:', requestId);
 
+                if (!requestId) {
+                    console.error('No request ID provided for element:', this);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'User ID is missing'
+                    });
+                    return;
+                }
+
+                // Clear previous data but preserve structure
+                $('#editForm')[0].reset();
+
                 $.ajax({
                     url: '/get-user-details/' + requestId,
                     type: 'GET',
@@ -357,25 +362,74 @@
                         console.log('Fetching user details for ID:', requestId);
                     },
                     success: function(response) {
-                        console.log('Response:', response);
-                        $('#userId').val(response.user.id);
-                        $('#name').val(response.user.name);
-                        $('#email').val(response.user.email);
-                        $('#badge_no').val(response.user.badge_no);
-                        $('#role').val(response.user.role);
-                        $('#status').val(response.user.status || 'Active');
-                        $('#hod').val(response.hod || 'N/A');
-                        var select = $('#deptList_id');
-                        select.empty(); // Clear previous options
-                        select.append('<option value="">Select Department</option>');
-                        response.dept_list.forEach(function(dept) {
-                            var selected = dept.id === response.user.dept_id ? 'selected' : '';
-                            select.append(`<option value="${dept.id}" ${selected}>${dept.dept_name}</option>`);
-                        });
-                        $('#editModal').modal('show');
+                        console.log('Full response:', JSON.stringify(response, null, 2));
+                        if (response.user && $('#editForm').length) {
+                            // Set userId after reset
+                            $('#userId').val(requestId).attr('name', 'id');
+
+                            // Create and populate name input
+                            $('#nameContainer').html(`
+                                <label for="name">Employee Name</label>
+                                <input type="text" class="form-control" id="name" name="name" value="${response.user.name || ''}" readonly>
+                            `);
+                            // Create and populate badge_no input
+                            $('#badgeNoContainer').html(`
+                                <label for="badge_no">Badge No</label>
+                                <input type="text" class="form-control" id="badge_no" name="badge_no" value="${response.user.badge_no || ''}" readonly>
+                            `);
+                            // Create and populate email input
+                            $('#emailContainer').html(`
+                                <label for="email">Employee Email</label>
+                                <input type="email" class="form-control" id="email" name="email" value="${response.user.email || ''}" readonly>
+                            `);
+
+                            $('#hod').val(response.hod || 'N/A');
+                            $('#status').val(response.user.status || 'Active');
+
+                            // Populate department select
+                            var selectDept = $('#deptList_id');
+                            if (selectDept.length) {
+                                selectDept.empty();
+                                selectDept.append('<option value="">Select Department</option>');
+                                response.dept_list.forEach(function(dept) {
+                                    var selected = dept.id == response.user.dept_id ? 'selected' : '';
+                                    selectDept.append(`<option value="${dept.id}" ${selected}>${dept.dept_name}</option>`);
+                                });
+                            } else {
+                                console.error('deptList_id select not found in DOM');
+                            }
+
+                            // Populate role select
+                            var selectRole = $('#role');
+                            if (selectRole.length) {
+                                selectRole.empty();
+                                selectRole.append('<option value="">Select Role</option>');
+                                var roles = ['hod', 'regular', 'purchasing', 'security', 'admin'];
+                                roles.forEach(function(role) {
+                                    var selected = role === response.user.role ? 'selected' : '';
+                                    selectRole.append(`<option value="${role}" ${selected}>${role.charAt(0).toUpperCase() + role.slice(1)}</option>`);
+                                });
+                            } else {
+                                console.error('role select not found in DOM');
+                            }
+
+                            // Show modal
+                            $('#editModal').modal('show');
+                        } else {
+                            console.error('No user data or form not found in response:', response);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: 'Failed to load user details or form not available'
+                            });
+                        }
                     },
-                    error: function(xhr) {
-                        console.error('Error fetching user:', xhr.responseText);
+                    error: function(xhr, status, error) {
+                        console.error('Error fetching user:', {
+                            status: status,
+                            error: error,
+                            response: xhr.responseText
+                        });
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
@@ -385,11 +439,21 @@
                 });
             });
 
+            // Update Account Submission (Single Handler)
             $('#editForm').on('submit', function(e) {
                 e.preventDefault();
                 console.log('Edit form submitted');
                 var formData = $(this).serialize();
-                console.log('Edit form data:', formData);
+                console.log('Edit form data before append:', formData);
+
+                // Ensure userId is included
+                var userId = $('#userId').val();
+                if (userId) {
+                    formData += '&id=' + encodeURIComponent(userId);
+                } else {
+                    console.error('userId is missing:', $('#userId').val());
+                }
+                console.log('Edit form data after append:', formData);
 
                 $.ajaxSetup({
                     headers: {

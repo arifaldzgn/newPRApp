@@ -438,13 +438,108 @@
         // Initialize Bootstrap dropdown
         $('#page-header-notifications-dropdown').dropdown({ autoClose: false });
     });
+
+    $(document).ready(function() {
+        if (typeof $ === 'undefined') {
+            console.error('jQuery is not loaded');
+            return;
+        }
+
+        $.ajaxSetup({
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            }
+        });
+
+        // Ensure modal triggers AJAX on show
+        $('#accountSettingsModal').on('shown.bs.modal', function() {
+            console.log('Modal shown, initiating AJAX call');
+            var userId = '{{ auth()->check() ? auth()->user()->id : 0 }}';
+            if (!userId || userId == 0) {
+                console.error('User ID is invalid:', userId);
+                $('#account-settings-content').html('<div class="alert alert-danger">User not authenticated.</div>');
+                return;
+            }
+
+            $.ajax({
+                url: '{{ route("user_details", ["id" => ":id"]) }}'.replace(':id', userId),
+                method: 'GET',
+                success: function(response) {
+                    console.log('User details response:', response);
+                    if (response.user) {
+                        $('#userId').val(response.user.id);
+                        $('#name').val(response.user.name || 'N/A');
+                        $('#email').val(response.user.email || 'N/A');
+                        $('#badge_no').val(response.user.badge_no || 'N/A');
+                        $('#role').val(response.user.role || 'N/A');
+                    } else {
+                        console.error('No user data in response:', response);
+                        $('#account-settings-content').html('<div class="alert alert-danger">Failed to load user details.</div>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('AJAX error:', status, error, xhr.responseText);
+                    $('#account-settings-content').html('<div class="alert alert-danger">Error loading user details: ' + (xhr.responseJSON?.error || 'Unknown error') + '</div>');
+                }
+            });
+        });
+
+        // Update password
+        $('#updateAccountForm').on('submit', function(e) {
+            e.preventDefault();
+            var currentPassword = $('#current_password').val().trim();
+            var newPassword = $('#new_password').val().trim();
+            var confirmPassword = $('#confirm_password').val().trim();
+            console.log('Raw input values:', { current_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword });
+            if (newPassword !== confirmPassword) {
+                console.warn('Client-side mismatch detected');
+                Swal.fire('Error', 'New passwords do not match', 'error');
+                return;
+            }
+            if (newPassword.length < 6) {
+                Swal.fire('Error', 'New password must be at least 6 characters', 'error');
+                return;
+            }
+            var formData = {
+                id: $('#userId').val(),
+                current_password: currentPassword,
+                new_password: newPassword,
+                confirm_password: confirmPassword
+            };
+            console.log('Submitting data:', formData);
+            $.ajax({
+                url: '{{ route("update_account") }}',
+                method: 'POST',
+                data: formData,
+                success: function(response) {
+                    Swal.fire('Success', response.message || 'Password updated successfully', 'success');
+                    $('#accountSettingsModal').modal('hide');
+                    $('#current_password').val('');
+                    $('#new_password').val('');
+                    $('#confirm_password').val('');
+                },
+                error: function(xhr) {
+                    console.error('Server response:', xhr.responseJSON);
+                    Swal.fire('Error', xhr.responseJSON.error || 'Failed to update password', 'error');
+                }
+            });
+        });
+    });
+
+    // Fallback if auth()->user()->id is not available
+    var authUserId = '{{ auth()->check() ? auth()->user()->id : 0 }}';
+    if (!authUserId || authUserId == 0) {
+        console.warn('Authentication check failed, using fallback ID');
+    }
     </script>
+
+
 
     
 
+    @yield('page-vendors-scripts')
 
     @stack('scripts')
 </body>
-@yield('page-vendors-scripts')
 
 </html>

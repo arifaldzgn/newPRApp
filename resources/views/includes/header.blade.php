@@ -111,10 +111,7 @@
                     <a class="dropdown-item" href="#"><i class="bx bx-user font-size-16 align-middle me-1"></i>
                         <span key="t-profile">Profile</span></a>
                     {{-- <a class="dropdown-item" href="#"><i class="bx bx-wallet font-size-16 align-middle me-1"></i> <span key="t-my-wallet">My Wallet</span></a> --}}
-                    <a class="dropdown-item d-block" href="#"><span
-                            class="badge bg-success float-end">11</span><i
-                            class="bx bx-wrench font-size-16 align-middle me-1"></i> <span
-                            key="t-settings">Settings</span></a>
+                    <a class="dropdown-item d-block" data-bs-toggle="modal" data-bs-target="#accountSettingsModal"><i class="bx bx-wrench font-size-16 align-middle me-1"></i> <span key="t-settings">Settings</span></a>
                     {{-- <a class="dropdown-item" href="#"><i class="bx bx-lock-open font-size-16 align-middle me-1"></i> <span key="t-lock-screen">Lock screen</span></a> --}}
                     <div class="dropdown-divider"></div>
                     <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
@@ -132,8 +129,96 @@
     </div>
 </header>
 
+<!-- Account Settings Modal -->
+<div class="modal fade" id="accountSettingsModal" tabindex="-1" aria-labelledby="accountSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="accountSettingsModalLabel"><i class="bx bx-cog me-2"></i> Account Settings</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="account-settings-content">
+                    <div class="alert alert-info mb-4" role="alert">
+                        <i class="bx bx-info-circle me-2"></i> Update your password securely.
+                    </div>
+                    <form id="updateAccountForm" class="row g-3">
+                        @csrf
+                        <input type="hidden" name="id" id="userId">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">Account Information</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="name" class="form-label">Name</label>
+                                                <input type="text" class="form-control" id="name" name="name" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="email" class="form-label">Email</label>
+                                                <input type="email" class="form-control" id="email" name="email" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="badge_no" class="form-label">Badge No.</label>
+                                                <input type="text" class="form-control" id="badge_no" name="badge_no" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="role" class="form-label">Role</label>
+                                                <input type="text" class="form-control" id="role" name="role" readonly>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">Change Password</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="current_password" class="form-label">Current Password</label>
+                                                <input type="password" class="form-control" id="current_password" name="current_password" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="new_password" class="form-label">New Password</label>
+                                                <input type="password" class="form-control" id="new_password" name="new_password" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="confirm_password" class="form-label">Confirm New Password</label>
+                                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary mt-3">Save Changes</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section('page-vendors-scripts')
- <script>
-       
-    </script>
+<script>
+    
+</script>
 @endsection

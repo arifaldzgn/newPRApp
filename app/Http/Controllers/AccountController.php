@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Models\deptList;
 use App\Models\PartStock;
 use App\Models\PrLogHistory;
+use Illuminate\Support\Facades\Hash;
+
 
 class AccountController extends Controller
 {
@@ -69,42 +71,81 @@ class AccountController extends Controller
 
     public function user_details($id)
     {
-        $user = User::find($id);
-
-        if ($user) {
-            return response()->json([
-                'user' => array_merge($user->toArray(), ['status' => $user->status ?? 'Active']),
-                'dept' => $user->deptList,
-                'hod' => $user->deptList && $user->deptList->hod ? $user->deptList->hod->email : null,
-                'dept_list' => deptList::all()
-            ]);
-        }
-        \Log::error('User not found: ' . $id);
-        return response()->json(['error' => 'User not found'], 404);
+        $user = User::with('deptList')->findOrFail($id);
+        $deptList = DeptList::all();
+        $hod = $user->deptList->hod->email ?? 'N/A';
+        return response()->json([
+            'user' => $user,
+            'dept' => $user->dept,
+            'hod' => $hod,
+            'dept_list' => $deptList
+        ]);
     }
 
     public function update_account(Request $request)
     {
+        // dd($request->all());
         try {
-            $request->validate([
+            \Log::info('Received request data:', $request->all());
+
+            // Determine if it's a password-only update
+            $isPasswordOnly = !$request->filled(['name', 'email', 'badge_no', 'role', 'deptList_id']);
+
+            $validationRules = [
                 'id' => 'required|exists:users,id',
-                'name' => 'required|string|max:255',
-                'email' => 'required|email|max:255|unique:users,email,' . $request->id,
-                'badge_no' => 'required|unique:users,badge_no,' . $request->id,
-                'role' => 'required|in:hod,regular,purchasing,security',
-                'deptList_id' => 'required|exists:dept_lists,id',
-                'status' => 'required'
-            ]);
+            ];
+
+            // Add password update rules if applicable
+            if ($request->filled('new_password')) {
+                $validationRules = array_merge($validationRules, [
+                    'current_password' => 'required|string',
+                    'new_password' => 'required|string|min:6',
+                    'confirm_password' => 'required|string|same:new_password',
+                ]);
+            }
+
+            // Add full update rules if applicable
+            if (!$isPasswordOnly) {
+                $validationRules = array_merge($validationRules, [
+                    'name' => 'required|string|max:255',
+                    'email' => 'required|email|max:255|unique:users,email,' . $request->id,
+                    'badge_no' => 'required|unique:users,badge_no,' . $request->id,
+                    'role' => 'required|in:hod,regular,purchasing,security',
+                    'deptList_id' => 'required|exists:dept_lists,id',
+                    // 'status' => 'required', // Commented out as per your code
+                ]);
+            }
+
+            $request->validate($validationRules);
 
             $user = User::findOrFail($request->id);
-            $user->update([
-                'name' => $request->name,
-                'email' => $request->email,
-                'badge_no' => $request->badge_no,
-                'role' => $request->role,
-                'dept_id' => $request->deptList_id,
-                'status' => $request->status // Store status (will be ignored until DB is updated)
-            ]);
+
+            // Handle password update if provided
+            if ($request->filled('new_password')) {
+                \Log::debug('Password check:', [
+                    'current_password' => $request->current_password,
+                    'new_password' => $request->new_password,
+                    'confirm_password' => $request->confirm_password,
+                    'match' => $request->new_password === $request->confirm_password
+                ]);
+                if (!Hash::check($request->current_password, $user->password)) {
+                    return response()->json(['error' => 'Current password is incorrect'], 400);
+                }
+                $user->password = bcrypt($request->new_password);
+                $user->save(); // Explicit save for password change
+            }
+
+            // Update other fields only if provided
+            if (!$isPasswordOnly) {
+                $user->update([
+                    'name' => $request->name,
+                    'email' => $request->email,
+                    'badge_no' => $request->badge_no,
+                    'role' => $request->role,
+                    'dept_id' => $request->deptList_id,
+                    'status' => $request->status ?? $user->status // Retain existing status if not provided
+                ]);
+            }
 
             return response()->json(['message' => 'User updated successfully']);
         } catch (\Exception $e) {
@@ -162,12 +203,14 @@ class AccountController extends Controller
 
     public function department_details($id)
     {
-        $dept = deptList::find($id);
+        $dept = deptList::with('hod')->find($id);
 
         if ($dept) {
+            $allHod = User::where('role', 'hod')->orWhere('id', $dept->user_hod_id)->get(); 
             return response()->json([
                 'dept' => $dept,
-                'hod' => $dept->hod ? $dept->hod->email : null
+                'hod' => $dept->hod ? $dept->hod->email : null,
+                'allHod' => $allHod
             ]);
         }
         return response()->json(['error' => 'Department not found'], 404);
