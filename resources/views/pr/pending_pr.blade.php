@@ -55,7 +55,7 @@
                                     </td>
                                     <td>
                                         <center>
-                                            @if ($dT->status === 'Pending' or $dT->status === 'Revised')
+                                            @if ($dT->status === 'Pending' or $dT->status === 'Revised' or $dT->status === 'HOD_Approved')
                                                 <button type="button" class="updateBtn btn btn-primary"
                                                     data-request-id="{{ $dT->id }}"><i
                                                         class="bi bi-pencil-square"></i> Edit</button>
@@ -523,7 +523,21 @@
 
             $('#approveButton').click(function() {
                 var requestId = $(this).data('request-id');
-                console.log(requestId);
+                var userRole = window.userRole || '{{ auth()->user()->role ?? "guest" }}'; 
+                var approveUrl;
+
+                // check role to determine the correct approval URL
+                if (userRole === 'purchasing' || userRole === 'pic' || userRole === 'admin') {
+                    approveUrl = '/ticket/' + requestId + '/purchasing_approve';
+                } else if (userRole === 'hod' || userRole === 'admin') {
+                    approveUrl = '/ticket/' + requestId + '/approve';
+                } else {
+                    Swal.fire("Error", "You are not authorized to approve this ticket", "error");
+                    return;
+                }
+
+                console.log('Approving ticket with ID:', requestId, 'via URL:', approveUrl);
+
                 $.ajaxSetup({
                     headers: {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
@@ -531,15 +545,18 @@
                 });
 
                 $.ajax({
-                    url: '/ticket/' + requestId + '/approve',
+                    url: approveUrl,
                     method: 'PUT',
                     success: function(response) {
                         Swal.fire("Success", response.message, "success");
                         $('#materialModal').modal('hide');
                     },
                     error: function(xhr, status, error) {
-                        console.error(error);
-                        Swal.fire("Error", "Failed to approve request", "error");
+                        console.error('Error approving ticket:', error);
+                        var errorMessage = xhr.responseJSON && xhr.responseJSON.error 
+                            ? xhr.responseJSON.error 
+                            : "Failed to approve request";
+                        Swal.fire("Error", errorMessage, "error");
                     }
                 });
             });

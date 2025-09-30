@@ -58,7 +58,7 @@
                 </div>
                 <div class="modal-footer">
                     @if (Route::currentRouteName() !== 'rejected')
-                        @if(auth()->user()->role === 'admin' || auth()->user()->role === 'pic' || auth()->user()->role === 'hod')
+                        @if(auth()->user()->role === 'admin' || auth()->user()->role === 'pic' || auth()->user()->role === 'hod' || auth()->user()->role === 'purchasing')
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" aria-label="Close">Cancel</button>
                             <button type="button" class="btn btn-danger" id="rejectButton">Reject</button>
                             <button type="button" class="btn btn-success" id="approveButton">Approve</button>

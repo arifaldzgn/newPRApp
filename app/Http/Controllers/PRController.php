@@ -10,25 +10,40 @@ use App\Models\prRequest;
 use App\Models\User;
 use App\Models\Notification;
 use App\Mail\TestEmail;
+use App\Models\deptList;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 use Dompdf\Dompdf;
-use Exception;
+use Dompdf\Options;
 
 class PRController extends Controller
 {
-    //
-
     public function index()
     {
-        if(auth()->user()->role === 'admin' or auth()->user()->role === 'pic')
-        {
+        $user = auth()->user();
+        
+        if ($user->role === 'admin' || $user->role === 'purchasing' || $user->role === 'pic') {
+            // Admin and Purchasing can see all tickets
             $dataT = prTicket::all();
-        }else{
-            $dataT = prTicket::where('user_id', auth()->user()->id)->get();
+        } elseif ($user->role === 'hod') {
+            // HOD can see all tickets related to their department
+            $dept = deptList::where('user_hod_id', $user->id)->first();
+            if ($dept) {
+                // Get all user IDs in the HOD's department
+                $deptUserIds = User::where('dept_id', $dept->id)->pluck('id');
+                // Get tickets where user_id is in the department
+                $dataT = prTicket::whereIn('user_id', $deptUserIds)->get();
+            } else {
+                // If HOD is not assigned to a department, show no tickets
+                $dataT = collect(); // Empty collection
+            }
+        } else {
+            // Clerk or other roles can only see their own tickets
+            $dataT = prTicket::where('user_id', $user->id)->get();
         }
+
         return view('pr.create_pr', [
             'dataR' => partList::all(),
             'dataT' => $dataT
@@ -82,16 +97,19 @@ class PRController extends Controller
 
             $userId = auth()->user()->id;
             $hodId = User::find($userId)->deptList->user_hod_id ?? $userId;
-            Log::info('User info', ['userId' => $userId, 'hodId' => $hodId]);
+            $picUser = User::where('role', 'pic')->first();
+            $picId = $picUser ? $picUser->id : $hodId; // Fallback to HOD if no PIC found
+            Log::info('User info', ['userId' => $userId, 'hodId' => $hodId, 'picId' => $picId]);
 
             $ticketCode = $this->generateUniqueTicketCode();
 
-            $newTicket = DB::transaction(function () use ($ticketCode, $userId, $hodId, $validatedData, $request) {
+            $newTicket = DB::transaction(function () use ($ticketCode, $userId, $hodId, $picId, $validatedData, $request) {
                 $newTicket = prTicket::create([
                     'ticketCode' => $ticketCode,
                     'status' => 'Pending',
                     'user_id' => $userId,
                     'approved_user_id' => $hodId,
+                    'purchasing_approved_user_id' => $picId,
                     'date_approval' => date('Y-m-d'),
                     'advance_cash' => $request->advance_cash ?? 0,
                 ]);
@@ -118,7 +136,6 @@ class PRController extends Controller
                     $prQ['ticket_id'] = $newTicket->id;
                     prRequest::create($prQ);
                     Log::info('Created PR request', ['partlist_id' => $prQ['partlist_id'], 'ticket_id' => $newTicket->id]);
-
 
                     if ($currentStock !== 'false' && is_numeric($currentStock)) {
                         PartStock::create([
@@ -228,24 +245,43 @@ class PRController extends Controller
 
     public function show($id)
     {
-        $ticket = prTicket::findOrFail($id); // Use findOrFail for better error handling
+        $user = auth()->user();
+        $ticket = prTicket::findOrFail($id);
+
+        // Authorization check based on hierarchy
+        if ($user->role !== 'admin' && $user->role !== 'purchasing' && $user->role !== 'pic') {
+            if ($user->role === 'hod') {
+                $dept = deptList::where('user_hod_id', $user->id)->first();
+                if (!$dept || !User::where('id', $ticket->user_id)->where('dept_id', $dept->id)->exists()) {
+                    return response()->json(['error' => 'Unauthorized to view this ticket'], 403);
+                }
+            } else {
+                if ($ticket->user_id !== $user->id) {
+                    return response()->json(['error' => 'Unauthorized to view this ticket'], 403);
+                }
+            }
+        }
+
         $ticketRequests = prRequest::where('ticket_id', $id)->get();
         $advanceCash = $ticket->advance_cash ?? 0;
 
         // Fetch user names
         $requester = User::find($ticket->user_id);
         $approver = $ticket->approved_user_id ? User::find($ticket->approved_user_id) : null;
+        $purchasingApprover = $ticket->purchasing_approved_user_id ? User::find($ticket->purchasing_approved_user_id) : null;
 
         return response()->json([
             'advance_cash' => $advanceCash,
             'pr_requests' => $ticketRequests,
             'requester_name' => $requester ? $requester->name : 'Unknown',
             'approver_name' => $approver ? $approver->name : 'None',
+            'purchasing_approver_name' => $purchasingApprover ? $purchasingApprover->name : 'None',
             'ticket' => [
                 'ticketCode' => $ticket->ticketCode,
                 'status' => $ticket->status,
                 'reason_reject' => $ticket->reason_reject,
                 'date_approval' => $ticket->date_approval,
+                'date_purchasing_approval' => $ticket->date_purchasing_approval,
                 'date_checked' => $ticket->date_checked,
                 'created_at' => $ticket->created_at,
                 'updated_at' => $ticket->updated_at,
@@ -255,7 +291,6 @@ class PRController extends Controller
 
     public function retrievePartName($id) {
         $partList = partList::find($id);
-        // dd($partList);
         if($partList->requires_stock_reduction == 'false'){
             $newStock = "false";
         }else{
@@ -275,48 +310,92 @@ class PRController extends Controller
 
     public function pending()
     {
-        if(auth()->user()->role === 'hod' or auth()->user()->role === 'admin'){
-            return view('pr.pending_pr', [
-                'dataT' => prTicket::where(function($query) {
-                    $query->where('status', 'Pending')
-                          ->orWhere('status', 'Revised');
-                })
-                ->get()
-            ]);
-        }else{
-            return view('pr.pending_pr', [
-                'dataT' => prTicket::where(function($query) {
-                    $query->where('status', 'Pending')
-                          ->orWhere('status', 'Revised');
-                })->where('user_id', auth()->user()->id)
-                ->get()
-            ]);
+        $user = auth()->user();
+
+        if ($user->role === 'admin' || $user->role === 'purchasing' || $user->role === 'pic') {
+            // Admin and Purchasing can see all pending tickets
+            $dataT = prTicket::whereIn('status', ['Pending', 'Revised', 'HOD_Approved'])->get();
+        } elseif ($user->role === 'hod') {
+            // HOD can see pending tickets from their department
+            $dept = deptList::where('user_hod_id', $user->id)->first();
+            if ($dept) {
+                $deptUserIds = User::where('dept_id', $dept->id)->pluck('id');
+                $dataT = prTicket::whereIn('user_id', $deptUserIds)
+                                 ->whereIn('status', ['Pending', 'Revised', 'HOD_Approved'])
+                                 ->get();
+            } else {
+                $dataT = collect(); // Empty collection if no department
+            }
+        } else {
+            // Clerk can see their own pending tickets, including HOD_Approved
+            $dataT = prTicket::where('user_id', $user->id)
+                             ->whereIn('status', ['Pending', 'Revised', 'HOD_Approved'])
+                             ->get();
         }
+
+        return view('pr.pending_pr', [
+            'dataT' => $dataT
+        ]);
     }
 
     public function approved()
     {
+        $user = auth()->user();
+
+        if ($user->role === 'admin' || $user->role === 'purchasing' || $user->role === 'pic') {
+            // Admin and Purchasing can see all approved tickets
+            $dataT = prTicket::where('status', 'Approved')->get();
+        } elseif ($user->role === 'hod') {
+            // HOD can see approved tickets from their department
+            $dept = deptList::where('user_hod_id', $user->id)->first();
+            if ($dept) {
+                $deptUserIds = User::where('dept_id', $dept->id)->pluck('id');
+                $dataT = prTicket::whereIn('user_id', $deptUserIds)
+                                 ->where('status', 'Approved')
+                                 ->get();
+            } else {
+                $dataT = collect(); // Empty collection if no department
+            }
+        } else {
+            // Clerk can only see their own approved tickets
+            $dataT = prTicket::where('user_id', $user->id)
+                             ->where('status', 'Approved')
+                             ->get();
+        }
+
         return view('pr.approved_pr', [
-            'dataT' => prTicket::where('status', 'Approved')->get()
+            'dataT' => $dataT
         ]);
     }
 
     public function rejected()
     {
-        if(auth()->user()->role === 'pic' or auth()->user()->role === 'admin'){
-            return view('pr.rejected_pr', [
-                'dataT' => prTicket::where(function($query) {
-                    $query->where('status', 'Rejected');
-                })->get()
-            ]);
-        }else{
-            return view('pr.rejected_pr', [
-                'dataT' => prTicket::where(function($query) {
-                    $query->where('status', 'Rejected');
-                })->where('user_id', auth()->user()->id)
-                ->get()
-            ]);
+        $user = auth()->user();
+
+        if ($user->role === 'admin' || $user->role === 'purchasing' || $user->role === 'pic') {
+            // Admin and Purchasing can see all rejected tickets
+            $dataT = prTicket::where('status', 'Rejected')->get();
+        } elseif ($user->role === 'hod') {
+            // HOD can see rejected tickets from their department
+            $dept = deptList::where('user_hod_id', $user->id)->first();
+            if ($dept) {
+                $deptUserIds = User::where('dept_id', $dept->id)->pluck('id');
+                $dataT = prTicket::whereIn('user_id', $deptUserIds)
+                                 ->where('status', 'Rejected')
+                                 ->get();
+            } else {
+                $dataT = collect(); // Empty collection if no department
+            }
+        } else {
+            // Clerk can only see their own rejected tickets
+            $dataT = prTicket::where('user_id', $user->id)
+                             ->where('status', 'Rejected')
+                             ->get();
         }
+
+        return view('pr.rejected_pr', [
+            'dataT' => $dataT
+        ]);
     }
 
     public function destroy($id)
@@ -397,43 +476,78 @@ class PRController extends Controller
     {
         $request = prTicket::findOrFail($requestId);
 
-        if ($request->approved_user_id !== '') {
-            $request->status = 'Approved';
-            $request->date_approval = date('Y-m-d');
-            $request->save();
+        if (auth()->user()->id !== $request->approved_user_id && auth()->user()->role !== 'admin') {
+            return response()->json(['error' => 'Unauthorized to approve this ticket'], 403);
+        }
 
-            $data = ['ticket' => $request->ticketCode, 'status' => $request->status];
-            $userHodId = $request->user->deptList->user_hod_id;
-            $userDeptHodEmail = User::find($userHodId)->email;
+        $request->status = 'HOD_Approved';
+        $request->date_approval = date('Y-m-d');
+        $request->approved_user_id = auth()->user()->id;
+        $request->save();
 
-            Mail::to($userDeptHodEmail)->send(new TestEmail($data));
+        $data = ['ticket' => $request->ticketCode, 'status' => $request->status];
 
-            // Notify user
+        $picId = $request->purchasing_approved_user_id;
+        $picEmail = User::find($picId)->email ?? 'ariffalkzn@gmail.com';
+        Mail::to($picEmail)->send(new TestEmail($data));
+
+        // Notify user
+        Notification::create([
+            'user_id' => $request->user_id,
+            'pr_ticket_id' => $request->id,
+            'status' => $request->status,
+            'message' => "Your PR request {$request->ticketCode} has been approved by HOD and is now pending purchasing approval."
+        ]);
+
+        // Notify purchasing
+        if ($picId) {
             Notification::create([
-                'user_id' => $request->user_id,
+                'user_id' => $picId,
                 'pr_ticket_id' => $request->id,
                 'status' => $request->status,
-                'message' => "Your PR request {$request->ticketCode} has been Approved."
-            ]);
-        } else {
-            $request->status = 'Approved';
-            $request->date_approval = date('Y-m-d');
-            $request->approved_user_id = auth()->user()->id;
-            $request->save();
-
-            // Notify user
-            Notification::create([
-                'user_id' => $request->user_id,
-                'pr_ticket_id' => $request->id,
-                'status' => $request->status,
-                'message' => "Your PR request {$request->ticketCode} has been Approved by you."
+                'message' => "PR request {$request->ticketCode} from " . $request->user->name . " has been approved by HOD and is pending your approval."
             ]);
         }
 
-        return response()->json(['message' => 'The ticket has been successfully approved']);
+        return response()->json(['message' => 'The ticket has been successfully approved by HOD']);
     }
 
-    // Test purpose
+    public function purchasingApprove($requestId)
+    {
+        $request = prTicket::findOrFail($requestId);
+
+        // Allow purchasing, pic, or admin to approve any ticket in HOD_Approved 
+        // dd(auth()->user()->role);
+        if (!in_array(auth()->user()->role, ['purchasing', 'pic', 'admin'])) {
+            return response()->json(['error' => 'Unauthorized to approve this ticket'], 403);
+        }
+
+        // Ensure ticket is in HOD_Approved status
+        if ($request->status !== 'HOD_Approved') {
+            return response()->json(['error' => 'Ticket must be HOD_Approved to be approved by purchasing'], 400);
+        }
+
+        $request->status = 'Approved';
+        $request->date_purchasing_approval = date('Y-m-d');
+        $request->purchasing_approved_user_id = auth()->user()->id;
+        $request->save();
+
+        $data = ['ticket' => $request->ticketCode, 'status' => $request->status];
+
+        $userEmail = $request->user->email ?? 'ariffalkzn@gmail.com';
+        Mail::to($userEmail)->send(new TestEmail($data));
+
+        // Notify user
+        Notification::create([
+            'user_id' => $request->user_id,
+            'pr_ticket_id' => $request->id,
+            'status' => $request->status,
+            'message' => "Your PR request {$request->ticketCode} has been fully approved by purchasing."
+        ]);
+
+        return response()->json(['message' => 'The ticket has been successfully approved by purchasing']);
+    }
+
     public function test()
     {
         $ticket = prTicket::with('prRequest')->findOrFail(27);
@@ -462,6 +576,21 @@ class PRController extends Controller
     public function rejectTicket(Request $request, $id)
     {
         $ticket = prTicket::findOrFail($id);
+        $currentUser = auth()->user();
+
+        // Authorization check based on hierarchy
+        if ($ticket->status === 'Pending' || $ticket->status === 'Revised') {
+            if ($currentUser->id !== $ticket->approved_user_id && $currentUser->role !== 'admin') {
+                return response()->json(['error' => 'Unauthorized to reject this ticket'], 403);
+            }
+        } elseif ($ticket->status === 'HOD_Approved') {
+            if ($currentUser->role !== 'purchasing' && $currentUser->role !== 'pic' && $currentUser->role !== 'admin') {
+                return response()->json(['error' => 'Unauthorized to reject this ticket'], 403);
+            }
+        } else {
+            return response()->json(['error' => 'Ticket not in a rejectable state'], 400);
+        }
+
         $ticket->status = 'Rejected';
         $ticket->reason_reject = $request->input('reason');
         $ticket->save();
@@ -486,50 +615,78 @@ class PRController extends Controller
 
     public function print($ticketCode)
     {
-        $data = prTicket::where('ticketCode', $ticketCode)->first();
-        if($data->status == 'Rejected'){
-            return redirect()->route('dashboard');
-        }else{
+        $user = auth()->user();
+        $data = prTicket::where('ticketCode', $ticketCode)->firstOrFail();
 
-            $price = prTicket::find($data->id)->prRequest()->sum('amount');
-            $qty = prTicket::find($data->id)->prRequest()->sum('qty');
-            $otherCost = prTicket::find($data->id)->prRequest()->sum('other_cost');
-            $priceXqty = $price * $qty;
-            $priceTotal = $priceXqty + $otherCost;
-
-            return view('print.print', [
-                'dataT' => prTicket::find($data->id),
-                'dataN' => $priceTotal,
-                'dataU' => User::find($data->approved_user_id)
-            ]);
+        // Authorization check based on hierarchy
+        if ($user->role !== 'admin' && $user->role !== 'purchasing' && $user->role !== 'pic') {
+            if ($user->role === 'hod') {
+                $dept = deptList::where('user_hod_id', $user->id)->first();
+                if (!$dept || !User::where('id', $data->user_id)->where('dept_id', $dept->id)->exists()) {
+                    return redirect()->route('dashboard')->with('error', 'Unauthorized to view this ticket');
+                }
+            } else {
+                if ($data->user_id !== $user->id) {
+                    return redirect()->route('dashboard')->with('error', 'Unauthorized to view this ticket');
+                }
+            }
         }
+
+        if (!in_array($data->status, ['HOD_Approved', 'Approved'])) {
+            return redirect()->route('dashboard')->with('error', 'Ticket must be HOD_Approved or Approved to print');
+        }
+
+        $price = prTicket::find($data->id)->prRequest()->sum('amount');
+        $qty = prTicket::find($data->id)->prRequest()->sum('qty');
+        $otherCost = prTicket::find($data->id)->prRequest()->sum('other_cost');
+        $priceXqty = $price * $qty;
+        $priceTotal = $priceXqty + $otherCost;
+
+        return view('print.print', [
+            'dataT' => prTicket::find($data->id),
+            'dataN' => $priceTotal,
+            'dataU' => User::find($data->approved_user_id)
+        ]);
     }
 
     public function printPdf($ticketCode)
     {
-        $data = prTicket::where('ticketCode', $ticketCode)->first();
-        if($data->status !== 'Approved'){
-            return redirect()->back();
-        }else{
+        $user = auth()->user();
+        $data = prTicket::where('ticketCode', $ticketCode)->firstOrFail();
 
-            $options = new Options();
-            $options->set('isHtml5ParserEnabled', true);
-            $dompdf = new Dompdf($options);
-            $html = view('printTicket', [
-                'dataT' => prTicket::find($data->id),
-                'dataN' => prTicket::find($data->id)->prRequest()->sum('amount'),
-                'dataU' => User::find($data->approved_user_id)
-            ])->render();
-            $html = "<style>" . file_get_contents(public_path('css/style.css')) . "</style>" . $html;
-            $dompdf->loadHtml($html);
-            $dompdf->render();
-
-            return $dompdf->stream('invoice.pdf');
-
+        // Authorization check based on hierarchy
+        if ($user->role !== 'admin' && $user->role !== 'purchasing' && $user->role !== 'pic') {
+            if ($user->role === 'hod') {
+                $dept = deptList::where('user_hod_id', $user->id)->first();
+                if (!$dept || !User::where('id', $data->user_id)->where('dept_id', $dept->id)->exists()) {
+                    return redirect()->back()->with('error', 'Unauthorized to view this ticket');
+                }
+            } else {
+                if ($data->user_id !== $user->id) {
+                    return redirect()->back()->with('error', 'Unauthorized to view this ticket');
+                }
+            }
         }
+
+        if (!in_array($data->status, ['HOD_Approved', 'Approved'])) {
+            return redirect()->back()->with('error', 'Ticket must be HOD_Approved or Approved to print');
+        }
+
+        $options = new Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $dompdf = new Dompdf($options);
+        $html = view('printTicket', [
+            'dataT' => prTicket::find($data->id),
+            'dataN' => prTicket::find($data->id)->prRequest()->sum('amount'),
+            'dataU' => User::find($data->approved_user_id)
+        ])->render();
+        $html = "<style>" . file_get_contents(public_path('css/style.css')) . "</style>" . $html;
+        $dompdf->loadHtml($html);
+        $dompdf->render();
+
+        return $dompdf->stream('invoice.pdf');
     }
 
-     // Update Material
     public function update(Request $request)
     {
         try {
@@ -559,7 +716,6 @@ class PRController extends Controller
                             'source_ref'   => $newRequest->prTicket->ticketCode
                         ]);
                     }
-
                 }
 
                 $newRequest->update([
@@ -605,70 +761,63 @@ class PRController extends Controller
     public function updateR(Request $request)
     {
         try {
+            $processedIds = [];
 
-        $processedIds = [];
+            foreach ($request->pr_request as $pRQ) {
+                if (in_array($pRQ['id'], $processedIds)) {
+                    continue;
+                }
 
-        foreach ($request->pr_request as $pRQ) {
+                $newRequest = prRequest::find($pRQ['id']);
+                $operations = ($pRQ['qty'] < $newRequest->qty) ? 'plus' : 'minus';
 
-            if (in_array($pRQ['id'], $processedIds)) {
-                continue;
+                $sa = 'PR No. ' . $newRequest->prTicket->ticketCode;
 
-            }
+                if ($pRQ['qty'] != $newRequest->qty) {
+                    $quantityDifference = abs($pRQ['qty'] - $newRequest->qty);
+                    PartStock::create([
+                        'part_list_id' => $newRequest->partlist_id,
+                        'quantity'     => $quantityDifference,
+                        'operations'   => $operations,
+                        'source'       => 'PR Request Updated (R)',
+                        'source_type'  => 'pr_request_update',
+                        'source_ref'   => $newRequest->prTicket->ticketCode
+                    ]);
+                }
 
-            $newRequest = prRequest::find($pRQ['id']);
-            $operations = ($pRQ['qty'] < $newRequest->qty) ? 'plus' : 'minus';
-
-            $sa = 'PR No. ' . $newRequest->prTicket->ticketCode;
-
-            if ($pRQ['qty'] != $newRequest->qty) {
-                $quantityDifference = abs($pRQ['qty'] - $newRequest->qty);
-                PartStock::create([
-                    'part_list_id' => $newRequest->partlist_id,
-                    'quantity'     => $quantityDifference,
-                    'operations'   => $operations,
-                    'source'       => 'PR Request Updated (R)',
-                    'source_type'  => 'pr_request_update',
-                    'source_ref'   => $newRequest->prTicket->ticketCode
+                $newRequest->update([
+                    'qty' => $pRQ['qty'],
+                    'amount' => $pRQ['amount'],
+                    'other_cost' => $pRQ['other_cost'],
+                    'vendor' => $pRQ['vendor'],
+                    'remark' => $pRQ['remark'],
+                    'category' => $pRQ['category'],
+                    'tag' => $pRQ['tag']
                 ]);
+
+                $processedIds[] = $pRQ['id'];
+
+                $revised = prTicket::findOrFail($pRQ['ticket_id']);
+                $revised->status = 'Revised';
+                $revised->advance_cash = $request->input('advance_cash');
+                $revised->save();
+
+                if($revised->save()){
+                    $data = [
+                        'ticket' => prTicket::find($pRQ['ticket_id'])->ticketCode,
+                        'status' => prTicket::find($pRQ['ticket_id'])->status
+                    ];
+
+                    // Send mail To Related User Email
+                    $userHodId = prTicket::find($pRQ['ticket_id'])->user->deptList->user_hod_id;
+                    $userDeptHodEmail = User::find($userHodId)->email;
+
+                    Mail::to($userDeptHodEmail)->send(new TestEmail($data));
+                }
             }
-
-
-            $newRequest->update([
-                'qty' => $pRQ['qty'], // New input
-                'amount' => $pRQ['amount'],
-                'other_cost' => $pRQ['other_cost'],
-                'vendor' => $pRQ['vendor'],
-                'remark' => $pRQ['remark'],
-                'category' => $pRQ['category'],
-                'tag' => $pRQ['tag']
-            ]);
-
-            $processedIds[] = $pRQ['id'];
-
-            $revised = prTicket::findOrFail($pRQ['ticket_id']);
-            $revised->status = 'Revised';
-            $revised->advance_cash = $request->input('advance_cash');
-            $revised->save();
-
-            if($revised->save()){
-
-                $data = [
-                    'ticket' => prTicket::find($pRQ['ticket_id'])->ticketCode,
-                    'status' => prTicket::find($pRQ['ticket_id'])->status
-                ];
-
-                // Send mail To Related User Email
-                $userHodId = prTicket::find($pRQ['ticket_id'])->user->deptList->user_hod_id;
-                $userDeptHodEmail = User::find($userHodId)->email;
-
-                Mail::to($userDeptHodEmail)->send(new TestEmail($data));
-            }
-        }
             return response()->json(['message' => 'Request successfully saved']);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
-
 }

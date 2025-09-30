@@ -8,6 +8,7 @@ use App\Http\Controllers\PartListController;
 use App\Http\Controllers\BookingRoomController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\NotificationController;
+use Illuminate\Support\Facades\File;
 
 
 // ------------------------- Public Routes -------------------------
@@ -52,6 +53,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::delete('/ticket/{id}', [PRController::class, 'destroy']);
     Route::put('/ticket/{id}/reject', [PRController::class, 'rejectTicket']);
     Route::put('/ticket/{id}/approve', [PRController::class, 'approveTicket'])->name('approveTicket');
+    Route::put('/ticket/{id}/purchasing_approve', [PRController::class, 'purchasingApprove'])->name('purchasingApprove');
+
     Route::get('/printPdf/{ticketCode}', [PRController::class, 'printPdf'])->name('printPdf');
     // Delete individual part from request
     Route::delete('/delete-part/{id}', [PRController::class, 'destroyPart']);
@@ -123,4 +126,30 @@ Route::group(['middleware' => 'auth'], function () {
         return 'Sent!';
     });
     // ======================== END OF NOTIFICATION =========================
+});
+
+Route::get('/models-first', function () {
+    $modelsPath = app_path('Models');
+    $models = collect(File::allFiles($modelsPath))
+        ->map(function ($file) use ($modelsPath) {
+            return 'App\\Models\\' . str_replace(
+                ['/', '.php'],
+                ['\\', ''],
+                $file->getRelativePathname()
+            );
+        });
+
+    $data = [];
+
+    foreach ($models as $model) {
+        if (class_exists($model)) {
+            try {
+                $data[$model] = $model::query()->first(); // first record or null
+            } catch (\Throwable $e) {
+                $data[$model] = '⚠️ Error: ' . $e->getMessage();
+            }
+        }
+    }
+
+    return response()->json($data);
 });

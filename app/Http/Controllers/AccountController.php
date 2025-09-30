@@ -163,7 +163,7 @@ class AccountController extends Controller
     {
         return view('account.department_index', [
             'deptList' => deptList::all(),
-            'users' => User::where('role', 'hod')->get()
+            'users' => User::whereIn('role', ['hod', 'purchasing'])->get()
         ]);
     }
 

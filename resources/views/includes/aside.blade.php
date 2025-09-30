@@ -64,8 +64,8 @@
                         </ul>
                     </ul>
                 </li> --}}
-
                 @if(auth()->user()->role === 'purchasing' || auth()->user()->role === 'admin')
+                
                 <li>
                     <a href="javascript: void(0);" class="has-arrow waves-effect">
                         <i class="bx bx-home-circle"></i>

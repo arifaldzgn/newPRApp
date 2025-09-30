@@ -70,4 +70,9 @@ class prTicket extends Model
     {
         return $this->belongsTo(User::class, 'approved_user_id');
     }
+
+    public function purchasingApprover()
+    {
+        return $this->belongsTo(User::class, 'purchasing_approved_user_id');
+    }
 }
