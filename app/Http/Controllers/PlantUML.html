@@ -1,0 +1,303 @@
+<!-- Create PR -->
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam activityBorderThickness 2
+skinparam activityFontSize 14
+
+|Requester|
+:Login;
+:Buka Dashboard;
+:Masuk ke Halaman Create PR;
+:Isi Form Create PR (material/komponen, jumlah, vendor, dll.);
+:Kirim PR;
+|System|
+:Buat Unique Ticket Code;
+:Validasi Stok;
+if (Stok Cukup?) then (yes)
+  :Kurangi Stok;
+  :Buat Tiket PR (Pending);
+  :Buat Request PR;
+  :Kirim Notifikasi ke Requester;
+  :Kirim Notifikasi ke HOD;
+  :Kirim Email ke HOD;
+else (no)
+  :Tampilkan Pesan Kesalahan (Stok Tidak Cukup);
+  detach
+endif
+|Requester|
+:Terima Notifikasi (PR Terkirim);
+|HOD|
+:Terima Notifikasi (PR Baru untuk Approval);
+stop
+
+@enduml
+
+
+<!-- Approve Reject PR -->
+ @startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam activityBorderThickness 2
+skinparam activityFontSize 14
+
+|HOD|
+:Login;
+:View PR dengan status Pending;
+:Pilih PR;
+:Lihat Detail PR;
+if (Setujui?) then (yes)
+  :Setujui PR (HOD);
+  |System|
+  :Ubah Status ke HOD_Approved;
+  :Perbarui Tanggal Persetujuan;
+  :Kirim Notifikasi ke Requester (Approved by HOD);
+  :Kirim Notifikasi ke Purchasing (Waiting for Purchasing Approval);
+  :Kirim Email ke Purchasing;
+  |Requester|
+  :Terima Notifikasi (Approved by HOD);
+  |Purchasing|
+  :Terima Notifikasi (PR Waiting for Purchasing Approval);
+else (no)
+  :Reject PR dengan Alasan *opsional;
+  |System|
+  :Ubah Status ke Rejected;
+  :Perbarui Alasan Penolakan;
+  :Kirim Notifikasi ke Requester (Rejected);
+  :Kirim Email ke HOD Requester;
+  |Requester|
+  :Terima Notifikasi (PR Rejected);
+endif
+fork
+    |Purchasing|
+    :Login;
+:View PR dengan status (HOD_Approved);
+:Pilih PR;
+:Lihat Detail PR;
+if (Setujui?) then (yes)
+  :Setujui PR (Purchasing Approval);
+  |System|
+  :Ubah Status ke Approved;
+  :Perbarui Tanggal Approval;
+  :Kirim Notifikasi ke Requester (Fully Approved);
+  :Kirim Email ke Requester;
+  |Requester|
+  :Terima Notifikasi (Fully Approved);
+else (no)
+  :Reject PR dengan Alasan;
+  |System|
+  :Ubah Status ke Rejected;
+  :Perbarui Alasan Rejection;
+  :Kirim Notifikasi ke Requester (Rejected);
+  :Kirim Email ke HOD Requester;
+  |Requester|
+  :Terima Notifikasi (PR Rejected);
+endif
+end fork
+stop
+
+@enduml
+
+
+<!-- Revise -->
+ @startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam activityBorderThickness 2
+skinparam activityFontSize 14
+
+|Requester|
+:Login;
+:Lihat PR (Pending/Rejected);
+:Pilih PR untuk Direvisi;
+:Perbarui Detail PR (jumlah, vendor, dll.);
+:Kirim PR yang Direvisi;
+|System|
+:Validasi Jumlah yang Diperbarui;
+if (Jumlah Berubah?) then (yes)
+  :Sesuaikan Stok (tambah/kurang);
+else (no)
+endif
+:Perbarui Request PR;
+:Ubah Status ke Revised;
+:Kirim Notifikasi ke Requester (Revised);
+:Kirim Notifikasi ke HOD (PR Revised);
+:Kirim Email ke HOD;
+|Requester|
+:Terima Notifikasi (PR Revised);
+|HOD|
+:Terima Notifikasi (PR Revised untuk direview ulang);
+stop
+
+@enduml
+
+<!-- Cancel PR -->
+ @startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam activityBorderThickness 2
+skinparam activityFontSize 14
+
+|Requester|
+:Login;
+:Lihat Daftar PR;
+:Pilih PR untuk Dibatalkan;
+:Konfirmasi Pembatalan;
+|System|
+:Periksa Status PR;
+if (PR Dapat Dibatalkan?) then (yes)
+  :Kembalikan Stok untuk Komponen;
+  :Hapus Tiket PR;
+  :Hapus Permintaan PR Terkait;
+else (no)
+  :Tampilkan Pesan Kesalahan (Tidak Dapat Dibatalkan);
+  detach
+endif
+:Catat Pembatalan;
+|Requester|
+:Terima Konfirmasi (PR Canceled);
+stop
+
+@enduml
+
+<!-- View PR -->
+ @startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam activityBorderThickness 2
+skinparam activityFontSize 14
+
+|Requester|
+:Login;
+:Buka Dashboard;
+:Masuk ke menu list PR (Pending/Approved/Rejected);
+:Pilih PR;
+|System|
+:check role user;
+if (Diizinkan?) then (yes)
+  :Get Detail Tiket PR;
+  :Get Permintaan PR;
+  :Get Nama Requester, Approver HOD, dan Approver Pembelian;
+  :Kembalikan Detail (kode tiket, status, komponen, dll.);
+else (no)
+  :Tampilkan Pesan Kesalahan (Tidak Diizinkan);
+  detach
+endif
+|Requester|
+:Lihat Detail PR;
+stop
+
+@enduml
+
+<!-- Print pr -->
+ @startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam activityBorderThickness 2
+skinparam activityFontSize 14
+
+|Requester|
+:Login;
+:Masuk ke menu list PR yang Fully Approved;
+:Pilih PR;
+:Pilih Opsi Cetak (Tiket/PDF);
+|System|
+:check role user;
+if (Diizinkan?) then (yes)
+  if (Status PR HOD_Approved atau Approved?) then (yes)
+    if (Cetak PDF?) then (yes)
+      :Buat PDF dengan Detail PR;
+      :Streaming PDF (invoice.pdf);
+    else (no)
+      :Tampilkan Tampilan Cetak dengan Detail PR;
+    endif
+  else (no)
+    :Kembali ke Dashboard dengan Pesan Kesalahan;
+    detach
+  endif
+else (no)
+  :Kembali ke Dashboard dengan Pesan Kesalahan;
+  detach
+endif
+|Requester|
+:Lihat/Unduh Hasil Cetak;
+stop
+
+@enduml
+
+<!-- Manage part -->
+ @startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam activityBorderThickness 2
+skinparam activityFontSize 14
+
+|Admin|
+:Login;
+:Masuk ke menu Inventory/Parts;
+fork
+  :Tambah Item Baru;
+  :Masukkan Detail Item (nama, kategori, dll.);
+  if (Memerlukan Stok?) then (yes)
+    :Tetapkan Stok Awal;
+    |System|
+    :Buat Item Stok;
+    :Catat Entri Stok;
+  else (no)
+    |System|
+    :Buat Item (Tanpa Stok);
+  endif
+fork again
+  :Perbarui Item;
+  :Ubah Detail Item (nama, kategori, jumlah);
+  |System|
+  :Validasi Jumlah;
+  :Perbarui Item;
+  :Sesuaikan Stok (tambah/kurang);
+  :Catat Penyesuaian Stok;
+fork again
+  :Hapus Item;
+  |System|
+  :Periksa ketersediaan Item;
+  :Hapus Item;
+  :Catat Penghapusan;
+end fork
+|Admin|
+:Terima Konfirmasi (Sukses/Gagal);
+stop
+
+@enduml
+
+<!-- Stock validation -->
+ @startuml
+skinparam monochrome true
+skinparam shadowing false
+skinparam activityBorderThickness 2
+skinparam activityFontSize 14
+
+|System|
+:Terima Data Permintaan PR;
+:Iterasi Permintaan PR sesuai jumlah item;
+:Ambil Detail Komponen;
+if (Komponen Memerlukan Stok?) then (yes)
+  :Hitung Stok Saat Ini;
+  if (Jumlah Diminta > Stok?) then (yes)
+    :Tampilkan Pesan Kesalahan (Stok Tidak Cukup);
+    detach
+  else (no)
+    :Lanjutkan;
+  endif
+else (no)
+  :Lewati Pemeriksaan Stok;
+endif
+:Kembalikan Hasil Validasi (Valid/Tidak Valid);
+|Requester|
+:Terima Umpan Balik Validasi;
+if (Valid?) then (yes)
+  :Lanjutkan Pengiriman PR;
+else (no)
+  :Sesuaikan PR atau Batalkan;
+endif
+stop
+
+@enduml

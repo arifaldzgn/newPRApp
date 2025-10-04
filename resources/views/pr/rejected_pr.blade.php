@@ -4,12 +4,11 @@
 @section('description', 'Rejected Purchase Request page')
 
 @section('content')
-    <!-- start:: Content -->
-
+    <!-- begin:: Content -->
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0 font-size-18">Create Item Request</h4>
+                <h4 class="mb-sm-0 font-size-18">Rejected Item Requests</h4>
             </div>
         </div>
     </div>
@@ -25,15 +24,15 @@
                         </button>
                     </div>
 
-                    <table id="example" class="table table-striped display compact" style="width:100%">
+                    <table id="datatable" class="table table-bordered nowrap w-100">
                         <thead>
                             <tr>
                                 <th>Request Date</th>
                                 <th>Ticket Code</th>
                                 <th>Requestor</th>
                                 <th>Status</th>
-                                <th class="reason-column">Reason</th>
-                                <th class="t-center"><center>Action</center></th>
+                                <th>Reason</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -44,219 +43,304 @@
                                 <td>{{ $dT->user->name }}</td>
                                 <td>
                                     @if ($dT->status === 'Pending')
-                                    <span class="badge badge-pill badge-secondary">{{ $dT->status }}</span>
+                                        <span class="badge bg-secondary">{{ $dT->status }}</span>
                                     @elseif ($dT->status === 'Rejected')
-                                    <span class="badge badge-pill badge-danger">{{ $dT->status }}</span>
+                                        <span class="badge bg-danger">{{ $dT->status }}</span>
                                     @else
-                                    <span class="badge badge-pill badge-success">{{ $dT->status }}</span>
+                                        <span class="badge bg-success">{{ $dT->status }}</span>
                                     @endif
                                 </td>
                                 <td>
-                                    <small>{{ $dT->reason_reject     }}</small>
+                                    <small>{{ $dT->reason_reject }}</small>
                                 </td>
                                 <td>
                                     @if ($dT->status === 'Pending')
-                                    <center><button class="updateBtn btn btn-primary" data-request-id="{{ $dT->id }}">Update</button></center>
+                                        <button class="btn btn-primary btn-sm updateBtn" data-request-id="{{ $dT->id }}">Update</button>
                                     @elseif ($dT->status === 'Rejected')
-                                    <center><button class="updateBtn btn btn-warning" data-request-id="{{ $dT->id }}">Update</button></center>
+                                        <button class="btn btn-warning btn-sm updateBtn" data-request-id="{{ $dT->id }}">Update</button>
                                     @else
-                                    <center>-</center>
+                                        <span>-</span>
                                     @endif
                                 </td>
                             </tr>
                             @endforeach
                         </tbody>
                     </table>
-                    
                 </div>
             </div>
-        </div> <!-- end col -->
+        </div>
     </div>
-    <!-- end:: Content -->
 
+    <!-- Modals -->
     @include('parts.pr_modals')
-
+    <!-- end:: Content -->
 @endsection
 
 @section('page-vendors-scripts')
+    <!-- DataTables and dependencies -->
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+
     <script>
         $(document).ready(function() {
-            $("#example").DataTable({
-                lengthChange: false,
-                buttons: ["copy", "excel", "pdf", "colvis"]
-            }).buttons().container().appendTo("#example_wrapper .col-md-6:eq(0)");
-            $(".dataTables_length select").addClass("form-select form-select-sm");
-        });
+            const dataTable = $('#datatable').DataTable({
+                responsive: true,
+                stateSave: true,
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                order: [[0, 'desc']],
+                dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>' +
+                     '<"row"<"col-sm-12"tr>>' +
+                     '<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
+                language: {
+                    search: "_INPUT_",
+                    searchPlaceholder: "Search requests..."
+                },
+                columnDefs: [
+                    { responsivePriority: 1, targets: 0 },
+                    { responsivePriority: 2, targets: 3 },
+                    { responsivePriority: 3, targets: 5 }
+                ]
+            });
 
-        jQuery(document).ready(function($) {
-            // $.noConflict();
+            // Initialize selectpicker
+            $('.selectpicker').selectpicker();
 
-            // Submit Request
+            // Cash advance toggle
+            $('#flexSwitchCheckDefault').on('change', function() {
+                $('#cashAdvance').prop('disabled', !this.checked);
+            });
+
+            let arrayCount = 1;
+            const maxItems = 5;
+
+            // Add new item
+            $('#addItem').click(function() {
+                if (arrayCount <= maxItems) {
+                    const newItem = `
+                        <div class="card card-body border border-primary" data-item-id="${arrayCount}">
+                            <div class="mb-3">
+                                <label>Part/Service Name <span class="text-danger">*</span></label>
+                                <select class="form-control selectpicker" 
+                                        name="pr_request[${arrayCount}][part_name]" 
+                                        data-live-search="true" 
+                                        data-array-count="${arrayCount}" 
+                                        title="Select Part/Service">
+                                    @foreach ($dataT as $dR)
+                                        <option value="{{ $dR->id }}">{{ $dR->part_name }}</option>
+                                    @endforeach
+                                </select>
+                                <small class="form-text text-muted">Required. Part/Service not available? <a href="" class="text-primary">Click here</a> to add new data.</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Amount / 1 Item (Rp) <span class="text-muted">(Optional)</span></label>
+                                <input type="number" class="form-control" name="pr_request[${arrayCount}][amount]" value="0">
+                                <small class="form-text text-muted">Optional. Default: 0 (will be calculated if not provided).</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                                <input type="number" min="1" class="form-control qty-input" name="pr_request[${arrayCount}][qty]" data-array-count="${arrayCount}" value="1">
+                                <small class="form-text text-muted">Required. Minimum value: 1.</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Vendor <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="pr_request[${arrayCount}][vendor]" value="">
+                                <small class="form-text text-muted">Required. Specify the supplier or vendor.</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Stocks</label>
+                                <input type="text" class="form-control" name="pr_request[${arrayCount}][requires_stock_reduction]" value="0" readonly>
+                                <small class="form-text text-muted">Read-only. Default: 0 (updated via stock check).</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">UoM</label>
+                                <input type="text" class="form-control" name="pr_request[${arrayCount}][UoM]" value="N/A" readonly>
+                                <small class="form-text text-muted">Read-only. Default: N/A (updated via part details).</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Category</label>
+                                <input type="text" class="form-control" name="pr_request[${arrayCount}][category]" value="N/A" readonly>
+                                <small class="form-text text-muted">Read-only. Default: N/A (updated via part details).</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Description/Others</label>
+                                <textarea class="form-control" name="pr_request[${arrayCount}][type]" readonly></textarea>
+                                <small class="form-text text-muted">Read-only. Default: empty (updated via part details).</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Remark <span class="text-muted">(Optional)</span></label>
+                                <input type="text" class="form-control" name="pr_request[${arrayCount}][remark]" value="">
+                                <small class="form-text text-muted">Optional. Add any additional notes (default: empty).</small>
+                                <input type="hidden" name="pr_request[${arrayCount}][partlist_id]" value="">
+                                <input type="hidden" name="pr_request[${arrayCount}][other_cost]" value="0">
+                                <input type="hidden" name="pr_request[${arrayCount}][tag]" value="0">
+                            </div>
+                            <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
+                        </div>
+                        <br>
+                    `;
+                    $("#prRequestForm").append(newItem);
+                    $(`select[name="pr_request[${arrayCount}][part_name]"]`).selectpicker();
+                    arrayCount++;
+                    $('#submitRequest').prop('disabled', false);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Maximum Items Reached',
+                        text: `Cannot add more than ${maxItems} items.`
+                    });
+                }
+            });
+
+            // Remove item
+            $(document).on('click', '.remove-item', function() {
+                $(this).closest('.card').remove();
+                arrayCount--;
+                if (arrayCount <= 1) {
+                    $('#submitRequest').prop('disabled', true);
+                }
+            });
+
+            // Submit request
             $('#submitRequest').click(function() {
-                var formData = $('#createPrForm').serialize();
+                const $button = $(this);
+                $button.prop('disabled', true).text('Submitting...');
+                $('#loadingSpinner').show();
 
-                $.ajaxSetup({
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                const formData = $('#createPrForm').serializeArray();
+                let prRequests = [];
+
+                formData.forEach(function(item) {
+                    if (item.name.match(/pr_request\[(\d+)\]\[(.*)\]/)) {
+                        const index = parseInt(RegExp.$1);
+                        const field = RegExp.$2;
+                        if (!prRequests[index]) prRequests[index] = {};
+                        prRequests[index][field] = item.value;
                     }
                 });
 
+                prRequests = prRequests.filter(item => item && Object.keys(item).length > 0);
+
                 $.ajax({
-                    url: '/ticket',
+                    url: '{{ route('validate.stock') }}',
                     method: 'POST',
-                    data: formData,
+                    data: { pr_request: prRequests },
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                     success: function(response) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Success',
-                            text: 'New Part successfully added'
-                        }).then(function() {
-                            location.reload();
-                        });
+                        if (response.valid) {
+                            $.ajax({
+                                url: '/ticket',
+                                method: 'POST',
+                                data: $('#createPrForm').serialize(),
+                                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                                success: function(response) {
+                                    Swal.fire('Success', response.message, 'success').then(() => location.reload());
+                                },
+                                error: function(xhr) {
+                                    $button.prop('disabled', false).text('Submit Request');
+                                    $('#loadingSpinner').hide();
+                                    Swal.fire('Error', xhr.responseJSON?.error || 'Failed to create request', 'error');
+                                }
+                            });
+                        } else {
+                            $button.prop('disabled', false).text('Submit Request');
+                            $('#loadingSpinner').hide();
+                            Swal.fire('Error', response.error, 'error');
+                        }
                     },
-                    error: function(xhr, status, error) {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: xhr.responseJSON.error || 'Failed to add new part'
-                        });
+                    error: function(xhr) {
+                        $button.prop('disabled', false).text('Submit Request');
+                        $('#loadingSpinner').hide();
+                        Swal.fire('Error', xhr.responseJSON?.error || 'Failed to validate stock', 'error');
                     }
                 });
             });
 
-            // Add Item
-            var arrayCount = 1;
-            var itemCount = 2;
-
-            function initializeSelectpicker() {
-                $('.selectpicker').selectpicker('refresh');
-            }
-
+            // Fetch part details
             function fillOtherFields(partName, arrayCount) {
                 $.ajax({
                     url: '{{ route('retrieve.part.details') }}',
                     method: 'GET',
                     data: { partName: partName },
                     success: function(data) {
-                        $(`input[name="pr_request[${arrayCount}][UoM]"]`).val(data.UoM || '');
-                        $(`input[name="pr_request[${arrayCount}][category]"]`).val(data.category || '');
-                        $(`textarea[name="pr_request[${arrayCount}][type]"]`).val(data.type || '');
-                        $(`input[name="pr_request[${arrayCount}][partlist_id]"]`).val(data.id || '');
+                        $(`input[name="pr_request[${arrayCount}][UoM]"]`).val(data.part.UoM || 'N/A');
+                        $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val(data.stock || '0');
+                        $(`input[name="pr_request[${arrayCount}][category]"]`).val(data.part.category || 'N/A');
+                        $(`textarea[name="pr_request[${arrayCount}][type]"]`).val(data.part.type || '');
+                        $(`input[name="pr_request[${arrayCount}][partlist_id]"]`).val(data.part.id || '');
+                        if (data.stock !== "false" && parseInt(data.stock) <= 0) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'No Stock Available',
+                                text: `The part ${data.part.name} has no available stock.`
+                            });
+                        }
                     },
-                    error: function(xhr, status, error) {
-                        console.error(error);
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: 'Failed to fetch part details'
-                        });
+                    error: function(xhr) {
+                        Swal.fire('Error', 'Failed to retrieve part details', 'error');
                     }
                 });
             }
 
-            $("#addItem").click(function() {
-                if (arrayCount <= 5) {
-                    var newItem = `
-                        <div class="card card-body border border-primary">
-                            <div class="mb-3">
-                                <div class="form-group">
-                                    <label>Part/Service Name</label>
-                                    <select class="form-control selectpicker" multiple data-max-options="1" name="pr_request[${arrayCount}][part_name]" data-live-search="true" data-array-count="${arrayCount}">
-                                    </select>
-                                    <small id="emailHelp" class="form-text text-muted">Part/Service not available? <a href="" class="text-primary">Click here</a> to add new data.</small>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label" for="typeNumber">Amount / 1 Item (Rp)</label>
-                                <input type="text" id="typeNumber" class="form-control" name="pr_request[${arrayCount}][amount]" />
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label" for="typeNumber">Quantity</label>
-                                <input type="number" min="1" class="form-control qty-input" name="pr_request[${arrayCount}][qty]" data-array-count="${arrayCount}" />
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Vendor</label>
-                                <input type="text" class="form-control" name="pr_request[${arrayCount}][vendor]">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Stocks</label>
-                                <input type="text" class="form-control" id="requires_stock_reduction" name="pr_request[${arrayCount}][requires_stock_reduction]" value="" readonly>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">UoM</label>
-                                <input type="text" class="form-control" id="UoM" name="pr_request[${arrayCount}][UoM]" value="" readonly>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Category</label>
-                                <input type="text" class="form-control" id="category" name="pr_request[${arrayCount}][category]" value="" readonly>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Description/Others</label>
-                                <textarea type="text" class="form-control" id="type" name="pr_request[${arrayCount}][type]" placeholder="Type" readonly></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Remark</label>
-                                <input type="text" class="form-control" name="pr_request[${arrayCount}][remark]">
-                                <input type="hidden" class="form-control" name="pr_request[${arrayCount}][partlist_id]">
-                                <input type="hidden" class="form-control" name="pr_request[${arrayCount}][other_cost]" value="0">
-                                <input type="hidden" class="form-control" name="pr_request[${arrayCount}][tag]" value="0">
-                            </div>
-                        </div>
-                        <br>
-                    `;
-                    $("#prRequestForm").append(newItem);
-                    arrayCount++;
-                    itemCount++;
-                    $('#submitRequest').prop('disabled', false);
-                    initializeSelectpicker();
-                } else {
+            // Quantity validation
+            $(document).on('input', '.qty-input', function() {
+                const qty = parseInt($(this).val());
+                const arrayCount = $(this).data('array-count');
+                const requiresStockReduction = $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val();
+
+                if (requiresStockReduction !== "false" && (isNaN(qty) || qty <= 0)) {
                     Swal.fire({
                         icon: 'error',
-                        title: 'Maximum is 5',
-                        text: 'Maximum items have been reached, Failed to add new request.'
+                        title: 'Invalid Quantity',
+                        text: 'Quantity must be a positive number.'
                     });
+                    $(this).val('1');
+                    return;
+                }
+
+                if (requiresStockReduction !== "false") {
+                    const stock = parseInt(requiresStockReduction);
+                    if (stock <= 0) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'No Stock Available',
+                            text: 'The selected part has no available stock.'
+                        });
+                        $(this).val('1');
+                        return;
+                    }
+                    if (qty > stock) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Exceeds Available Stock',
+                            text: `The quantity cannot exceed the available stock of ${stock}.`
+                        });
+                        $(this).val('1');
+                    }
                 }
             });
 
+            // Part selection
             $(document).on('change', '.selectpicker', function() {
-                var partName = $(this).val();
-                var arrayCount = $(this).attr('data-array-count');
+                const partName = $(this).val();
+                const arrayCount = $(this).data('array-count');
                 fillOtherFields(partName, arrayCount);
             });
 
-            $(document).on('input', '.qty-input', function() {
-                var qty = parseInt($(this).val());
-                var arrayCount = $(this).data('array-count');
-                var requiresStockReduction = $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val();
-
-                if (requiresStockReduction !== "false" && qty > parseInt(requiresStockReduction)) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Exceeds Available Stock',
-                        text: `The quantity cannot exceed the available stock of ${requiresStockReduction}.`
-                    });
-                    $(this).val('');
-                }
-            });
-
-            // Update Button Handler
+            // Update button handler
             $(document).on('click', '.updateBtn', function() {
-                var requestId = $(this).data('request-id');
+                const requestId = $(this).data('request-id');
                 $('#approveButton').data('request-id', requestId);
                 $('#rejectButton').data('request-id', requestId);
-
-                $.ajaxSetup({
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    }
-                });
 
                 $.ajax({
                     url: '/ticketDetails/' + requestId,
                     method: 'GET',
                     success: function(response) {
                         if (!response || !response.pr_requests || !Array.isArray(response.pr_requests)) {
-                            console.error("Invalid response: Expected pr_requests array, got:", response);
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Error',
@@ -267,12 +351,11 @@
 
                         $('#typeNumber').val(response.advance_cash || '');
                         $('#materialDataForm').empty();
-                        var itemCount = 1;
-                        var materialCount = 0;
+                        let itemCount = 1;
+                        let materialCount = 0;
 
                         $.each(response.pr_requests, function(index, pr_request) {
                             if (!pr_request || !pr_request.partlist_id) {
-                                console.warn("Skipping invalid pr_request:", pr_request);
                                 return;
                             }
 
@@ -280,71 +363,66 @@
                                 url: '/retrieve-part-name/' + pr_request.partlist_id,
                                 method: 'GET',
                                 success: function(data) {
-                                    var partName = data.part_name || 'N/A';
-                                    var availableStock = parseInt(data.stock) || 0;
-                                    var initialQuantity = parseInt(pr_request.qty) || 0;
-                                    var totalStock = initialQuantity + availableStock;
+                                    const partName = data.part_name || 'N/A';
+                                    const availableStock = parseInt(data.stock) || 0;
+                                    const initialQuantity = parseInt(pr_request.qty) || 0;
+                                    const totalStock = initialQuantity + availableStock;
 
-                                    var cardHeader =
-                                        '<div class="card-header d-flex justify-content-between align-items-center">' +
-                                        '<h5 class="mb-0">Part Request No. ' + itemCount + '</h5>' +
-                                        '<button type="button" class="btn btn-sm close" aria-label="Close" data-delete-id="' + pr_request.id + '"' + (response.pr_requests.length === 1 ? ' disabled' : '') + '>' +
-                                        '<i class="bi bi-trash"></i>' +
-                                        '</button>' +
-                                        '</div>';
-
-                                    var row =
-                                        '<div class="card mb-3 border-primary">' +
-                                        cardHeader +
-                                        '<div class="card-body">' +
-                                        '<div class="mb-3">' +
-                                        '<label for="materialName" class="form-label">Requested Part Name:</label>' +
-                                        '<input type="text" class="form-control mb-2" id="materialName" name="pr_request[' + materialCount + '][material_name]" value="' + partName + '" readonly>' +
-                                        '</div>' +
-                                        '<div class="mb-3">' +
-                                        '<label for="materialQuantity" class="form-label">Category</label>' +
-                                        '<input type="text" class="form-control" id="requestedCategory" name="pr_request[' + materialCount + '][category]" value="' + (pr_request.category || '') + '" readonly>' +
-                                        '</div>' +
-                                        '<div class="mb-3">' +
-                                        '<label for="materialQuantity" class="form-label">Available Stock</label>' +
-                                        '<input type="text" class="form-control" id="availStock' + materialCount + '" name="pr_request[' + materialCount + '][requires_stock_reduction]" value="' + (isNaN(availableStock) ? 'N/A' : availableStock) + '" disabled>' +
-                                        '</div>' +
-                                        '<div class="mb-3">' +
-                                        '<label for="materialQuantity" class="form-label">Requested Quantity</label>' +
-                                        '<input type="number" class="form-control requested-quantity" id="requestedQuantity' + materialCount + '" name="pr_request[' + materialCount + '][qty]" value="' + (pr_request.qty || '') + '" data-initial-quantity="' + (pr_request.qty || 0) + '" data-total-stock="' + totalStock + '" data-pr-id="' + pr_request.id + '" data-available-stock="' + availableStock + '" min="0">' +
-                                        '</div>' +
-                                        '<div class="mb-3">' +
-                                        '<label for="materialQuantity" class="form-label">Amount (Rp.)</label>' +
-                                        '<input type="number" class="form-control" id="requestedAmount" name="pr_request[' + materialCount + '][amount]" value="' + (pr_request.amount || '') + '">' +
-                                        '</div>' +
-                                        '<div class="mb-3">' +
-                                        '<label for="materialQuantity" class="form-label">Other Cost</label>' +
-                                        '<input type="number" class="form-control" id="requestedOtherCost" name="pr_request[' + materialCount + '][other_cost]" value="' + (pr_request.other_cost || '') + '">' +
-                                        '</div>' +
-                                        '<div class="mb-3">' +
-                                        '<label for="materialQuantity" class="form-label">Vendor</label>' +
-                                        '<input type="text" class="form-control" id="requestedVendor" name="pr_request[' + materialCount + '][vendor]" value="' + (pr_request.vendor || '') + '">' +
-                                        '</div>' +
-                                        '<div class="mb-3">' +
-                                        '<label for="materialQuantity" class="form-label">Remark</label>' +
-                                        '<input type="text" class="form-control" id="requestedRemark" name="pr_request[' + materialCount + '][remark]" value="' + (pr_request.remark || '') + '">' +
-                                        '</div>' +
-                                        '<div class="mb-3">' +
-                                        '<label for="materialQuantity" class="form-label">Tag</label>' +
-                                        '<input type="text" class="form-control" id="requestedTag" name="pr_request[' + materialCount + '][tag]" value="' + (pr_request.tag || '') + '">' +
-                                        '</div>' +
-                                        '<input type="hidden" class="form-control" name="pr_request[' + materialCount + '][id]" value="' + (pr_request.id || '') + '">' +
-                                        '<input type="hidden" class="form-control" name="pr_request[' + materialCount + '][ticket_id]" value="' + (pr_request.ticket_id || '') + '">' +
-                                        '<input type="hidden" class="form-control" name="pr_request[' + materialCount + '][partlist_id]" value="' + (pr_request.partlist_id || '') + '">' +
-                                        '</div>' +
-                                        '</div>';
-
+                                    const cardHeader = `
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h5 class="mb-0">Part Request No. ${itemCount}</h5>
+                                            <button type="button" class="btn-close remove-part" data-part-id="${pr_request.id}" ${response.pr_requests.length === 1 ? 'disabled' : ''}></button>
+                                        </div>`;
+                                    const row = `
+                                        <div class="card mb-3 border-primary">
+                                            ${cardHeader}
+                                            <div class="card-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Requested Part Name</label>
+                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][material_name]" value="${partName}" readonly>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Category</label>
+                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][category]" value="${pr_request.category || 'N/A'}" readonly>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Available Stock</label>
+                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][requires_stock_reduction]" value="${isNaN(availableStock) ? 'N/A' : availableStock}" disabled>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Requested Quantity</label>
+                                                    <input type="number" class="form-control requested-quantity" name="pr_request[${materialCount}][qty]" value="${pr_request.qty || ''}" data-initial-quantity="${pr_request.qty || 0}" data-total-stock="${totalStock}" data-pr-id="${pr_request.id}" data-available-stock="${availableStock}" min="0">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Amount / 1 Item (Rp) <span class="text-muted">(Optional)</span></label>
+                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][amount]" value="${pr_request.amount || ''}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Other Cost</label>
+                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][other_cost]" value="${pr_request.other_cost || ''}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Vendor <span class="text-danger">*</span></label>
+                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][vendor]" value="${pr_request.vendor || ''}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Remark <span class="text-muted">(Optional)</span></label>
+                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][remark]" value="${pr_request.remark || ''}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Tag</label>
+                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][tag]" value="${pr_request.tag || ''}">
+                                                </div>
+                                                <input type="hidden" name="pr_request[${materialCount}][id]" value="${pr_request.id || ''}">
+                                                <input type="hidden" name="pr_request[${materialCount}][ticket_id]" value="${pr_request.ticket_id || ''}">
+                                                <input type="hidden" name="pr_request[${materialCount}][partlist_id]" value="${pr_request.partlist_id || ''}">
+                                            </div>
+                                        </div>`;
                                     $('#materialDataForm').append(row);
                                     itemCount++;
                                     materialCount++;
                                 },
-                                error: function(xhr, status, error) {
-                                    console.error("Error fetching part name for partlist_id:", pr_request.partlist_id, "Error:", error);
+                                error: function(xhr) {
                                     Swal.fire({
                                         icon: 'error',
                                         title: 'Error',
@@ -367,54 +445,50 @@
                             });
                         });
                     },
-                    error: function(xhr, status, error) {
-                        console.error("Error fetching ticket details:", error);
+                    error: function(xhr) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: xhr.responseJSON.error || 'Failed to load ticket details.'
+                            text: xhr.responseJSON?.error || 'Failed to load ticket details.'
                         });
                     }
                 });
             });
 
-            // Save Material Changes
+            // Save material changes
             $('#saveMaterialChanges').click(function() {
                 $(this).prop('disabled', true);
-
-                var formData = $('#materialDataForm').serialize();
-                var advanceCash = $('#typeNumber').val();
-                formData += '&advance_cash=' + encodeURIComponent(advanceCash);
-
-                $.ajaxSetup({
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    }
-                });
+                const formData = $('#materialDataForm').serialize();
+                const advanceCash = $('#typeNumber').val();
+                const finalFormData = formData + '&advance_cash=' + encodeURIComponent(advanceCash);
 
                 $.ajax({
                     url: '/updateTicketR',
                     method: 'POST',
-                    data: formData,
+                    data: finalFormData,
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                     success: function(response) {
                         Swal.fire({
                             icon: 'success',
                             title: 'Success',
                             text: response.message
-                        }).then(function() {
-                            location.reload();
-                        });
+                        }).then(() => location.reload());
                     },
-                    error: function(xhr, status, error) {
-                        var errorMessage = xhr.responseJSON.error || 'Failed to update material data';
+                    error: function(xhr) {
+                        const errorMessage = xhr.responseJSON?.error || 'Failed to update material data';
                         if (xhr.status === 422) {
-                            errorMessage = xhr.responseJSON.error || 'Invalid input data provided';
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: xhr.responseJSON?.error || 'Invalid input data provided'
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: errorMessage
+                            });
                         }
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: errorMessage
-                        });
                     },
                     complete: function() {
                         $('#saveMaterialChanges').prop('disabled', false);
@@ -422,38 +496,32 @@
                 });
             });
 
-            // Delete Confirmation Modal & Button
+            // Delete confirmation
             $(document).on('click', '.delete-btn', function() {
-                var itemId = $(this).data('item-id');
+                const itemId = $(this).data('item-id');
                 $('#deleteModal').modal('show');
                 $('#confirmDelete').data('item-id', itemId);
             });
 
             $('#confirmDelete').on('click', function() {
-                var itemId = $(this).data('item-id');
+                const itemId = $(this).data('item-id');
                 $('#deleteModal').modal('hide');
-                $.ajaxSetup({
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    }
-                });
                 $.ajax({
                     url: '/ticket/' + itemId,
                     method: 'DELETE',
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                     success: function(response) {
                         Swal.fire({
                             icon: 'success',
                             title: 'Success',
                             text: response.message
-                        }).then(function() {
-                            location.reload();
-                        });
+                        }).then(() => location.reload());
                     },
-                    error: function(xhr, status, error) {
+                    error: function(xhr) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: xhr.responseJSON.error || 'Failed to delete ticket'
+                            text: xhr.responseJSON?.error || 'Failed to delete ticket'
                         });
                     }
                 });
@@ -463,17 +531,17 @@
                 $('#deleteModal').modal('hide');
             });
 
-            // Reject Button Handler
+            // Reject button handler
             $(document).on('click', '#rejectButton', function() {
-                var requestId = $(this).data('request-id');
+                const requestId = $(this).data('request-id');
                 $('#rejectReasonModal').modal('show');
                 $('#materialModal').modal('hide');
                 $('#confirmRejectButton').data('request-id', requestId);
             });
 
             $('#confirmRejectButton').on('click', function() {
-                var requestId = $(this).data('request-id');
-                var rejectReason = $('#rejectReasonTextarea').val();
+                const requestId = $(this).data('request-id');
+                const rejectReason = $('#rejectReasonTextarea').val();
                 if (!rejectReason.trim()) {
                     Swal.fire({
                         icon: 'error',
@@ -483,31 +551,24 @@
                     return;
                 }
 
-                $.ajaxSetup({
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    }
-                });
-
                 $.ajax({
                     url: '/ticket/' + requestId + '/reject',
                     method: 'PUT',
                     data: { reason: rejectReason },
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                     success: function(response) {
                         Swal.fire({
                             icon: 'success',
                             title: 'Success',
                             text: response.message
-                        }).then(function() {
-                            location.reload();
-                        });
+                        }).then(() => location.reload());
                         $('#rejectReasonModal').modal('hide');
                     },
-                    error: function(xhr, status, error) {
+                    error: function(xhr) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: xhr.responseJSON.error || 'Failed to reject request'
+                            text: xhr.responseJSON?.error || 'Failed to reject request'
                         });
                     }
                 });
@@ -517,56 +578,43 @@
                 $('#rejectReasonTextarea').val('');
             });
 
-            // Approve Button Handler
+            // Approve button handler
             $(document).on('click', '#approveButton', function() {
-                var requestId = $(this).data('request-id');
-                $.ajaxSetup({
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    }
-                });
-
+                const requestId = $(this).data('request-id');
                 $.ajax({
                     url: '/ticket/' + requestId + '/approve',
                     method: 'PUT',
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                     success: function(response) {
                         Swal.fire({
                             icon: 'success',
                             title: 'Success',
                             text: response.message
-                        }).then(function() {
-                            location.reload();
-                        });
+                        }).then(() => location.reload());
                         $('#materialModal').modal('hide');
                     },
-                    error: function(xhr, status, error) {
+                    error: function(xhr) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: xhr.responseJSON.error || 'Failed to approve request'
+                            text: xhr.responseJSON?.error || 'Failed to approve request'
                         });
                     }
                 });
             });
 
-            // Material Modal Card Close Button
-            $(document).on('click', '#materialDataForm .close', function() {
+            // Remove part
+            $(document).on('click', '.remove-part', function() {
                 if ($(this).is(':disabled')) {
                     return;
                 }
-
-                var partId = $(this).data('delete-id');
-                var cardToRemove = $(this).closest('.card');
-
-                $.ajaxSetup({
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    }
-                });
+                const partId = $(this).data('part-id');
+                const cardToRemove = $(this).closest('.card');
 
                 $.ajax({
                     url: '/delete-part/' + partId,
                     method: 'DELETE',
+                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                     success: function(response) {
                         cardToRemove.remove();
                         Swal.fire({
@@ -575,24 +623,21 @@
                             text: 'Part deleted successfully'
                         });
                     },
-                    error: function(xhr, status, error) {
-                        console.error(error);
+                    error: function(xhr) {
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: xhr.responseJSON.error || 'Failed to delete part'
+                            text: xhr.responseJSON?.error || 'Failed to delete part'
                         });
                     }
                 });
             });
 
-            // Quantity Validation
+            // Quantity validation in modal
             $(document).on('input', '.requested-quantity', function() {
-                var requestedQuantity = parseInt($(this).val());
-                var totalStock = parseInt($(this).data('total-stock'));
-                var availableStock = parseInt($(this).data('available-stock'));
-
-                if (!isNaN(availableStock) && requestedQuantity > totalStock) {
+                const requestedQuantity = parseInt($(this).val());
+                const totalStock = parseInt($(this).data('total-stock'));
+                if (!isNaN(totalStock) && requestedQuantity > totalStock) {
                     Swal.fire({
                         icon: 'error',
                         title: 'Invalid Quantity',
@@ -600,16 +645,6 @@
                     });
                     $(this).val($(this).data('initial-quantity'));
                 }
-            });
-
-            // Advance Cash Checkbox
-            $(document).ready(function() {
-                const switchCheckbox = $('#flexSwitchCheckDefault');
-                const inputField = $('#cashAdvance');
-
-                switchCheckbox.on('change', function() {
-                    inputField.prop('disabled', !this.checked);
-                });
             });
         });
     </script>
