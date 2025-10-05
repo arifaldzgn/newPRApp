@@ -252,14 +252,14 @@
                                 <small class="form-text text-muted">Optional. Default: 0 (will be calculated if not provided).</small>
                             </div>
                             <div class="mb-3">
+                                <label class="form-label">Vendor <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="pr_request[${arrayCount}][vendor]" value="">
+                                <small class="form-text text-muted">Required. Specify the supplier or vendor, or write Etowa if there is none.</small>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label">Quantity <span class="text-danger">*</span></label>
                                 <input type="number" min="1" class="form-control qty-input" name="pr_request[${arrayCount}][qty]" data-array-count="${arrayCount}" value="1">
                                 <small class="form-text text-muted">Required. Minimum value: 1.</small>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Vendor <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="pr_request[${arrayCount}][vendor]" value="">
-                                <small class="form-text text-muted">Required. Specify the supplier or vendor.</small>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Stocks</label>
@@ -289,9 +289,53 @@
                                 <input type="hidden" name="pr_request[${arrayCount}][other_cost]" value="0">
                                 <input type="hidden" name="pr_request[${arrayCount}][tag]" value="0">
                             </div>
-                            <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
-                        </div>
-                        <br>
+
+                            <!-- Additional Document Section -->
+                            <div class="card card-body border border-secondary mt-3" data-item-id="doc-${arrayCount}">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input toggle-doc-form" type="checkbox" id="toggle-doc-${arrayCount}">
+                                    <label class="form-check-label fw-semibold" for="toggle-doc-${arrayCount}">
+                                        Add Additional Document  <span class="text-muted">(Optional)</span>
+                                    </label>
+                                </div>
+
+                                <!-- Hidden document form -->
+                                <div class="additional-doc-form d-none">
+                                    <div class="mb-3">
+                                        <label class="form-label">Document Type</label>
+                                        <select class="form-control" name="pr_request[${arrayCount}][document_type]">
+                                            <option value="">Select Document Type</option>
+                                            <option value="Receipt">Receipt</option>
+                                            <option value="Quotation">Quotation</option>
+                                            <option value="Invoice">Invoice</option>
+                                            <option value="Others">Others</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Upload Document</label>
+                                        <div class="border border-dashed rounded p-3 text-center bg-light dropzone-area" data-array-count="${arrayCount}">
+                                            <p class="mb-1 text-muted">Drag & Drop or Click to Upload</p>
+                                            <input type="file" class="form-control-file d-none file-input" 
+                                                name="pr_request[${arrayCount}][documents][]" multiple 
+                                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                                            <button type="button" class="btn btn-outline-primary btn-sm browse-files">Browse</button>
+                                        </div>
+                                        <div class="uploaded-files mt-2"></div>
+                                    </div>
+
+                                    <!-- 🟢 Different style & label -->
+                                    <button type="button" class="btn btn-outline-danger btn-sm remove-document">
+                                        <i class="bi bi-x-circle"></i> Remove Document
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 🔴 Clearer material button -->
+                            <button type="button" class="btn btn-danger btn-sm mt-3 remove-item">
+                                <i class="bi bi-trash"></i> Remove Material
+                            </button>
+                        </div><br>
                     `;
                     $("#prRequestForm").append(newItem);
                     $(`select[name="pr_request[${arrayCount}][part_name]"]`).selectpicker();
@@ -305,6 +349,7 @@
                     });
                 }
             });
+
 
             // Remove item
             $(document).on('click', '.remove-item', function() {
@@ -618,5 +663,58 @@
                 });
             });
         });
+
+        // Toggle the additional document form
+        $(document).on('change', '.toggle-doc-form', function() {
+            const card = $(this).closest('.card');
+            const form = card.find('.additional-doc-form');
+
+            if ($(this).is(':checked')) {
+                form.removeClass('d-none');
+            } else {
+                form.addClass('d-none');
+                form.find('input, select, textarea').val(''); // clear all inputs when unchecked
+                form.find('.uploaded-files').empty();
+            }
+        });
+
+        // Browse button click
+        $(document).on('click', '.browse-files', function() {
+            $(this).closest('.dropzone-area').find('.file-input').click();
+        });
+
+        // Show uploaded file list
+        $(document).on('change', '.file-input', function() {
+            const uploadedFilesContainer = $(this).closest('.dropzone-area').siblings('.uploaded-files');
+            uploadedFilesContainer.empty();
+
+            Array.from(this.files).forEach(file => {
+                const fileRow = $(`
+                    <div class="d-flex justify-content-between align-items-center border p-2 rounded mb-1 bg-white">
+                        <span>${file.name}</span>
+                        <button type="button" class="btn btn-sm btn-link text-danger remove-file">&times;</button>
+                    </div>
+                `);
+                uploadedFilesContainer.append(fileRow);
+            });
+        });
+
+        // Remove file from preview
+        $(document).on('click', '.remove-file', function() {
+            $(this).closest('div').remove();
+        });
+
+        // Hide and clear document form when Remove Document clicked
+        $(document).on('click', '.remove-document', function() {
+            const docCard = $(this).closest('.additional-doc-form');
+            const toggleCheckbox = docCard.closest('.card').find('.toggle-doc-form');
+
+            docCard.addClass('d-none');
+            docCard.find('input, select, textarea').val('');
+            docCard.find('.uploaded-files').empty();
+            toggleCheckbox.prop('checked', false);
+        });
+
+
     </script>
 @endsection

@@ -331,7 +331,7 @@
             });
 
             // Update button handler
-            $(document).on('click', '.updateBtn', function() {
+           $('.updateBtn').click(function() {
                 const requestId = $(this).data('request-id');
                 $('#approveButton').data('request-id', requestId);
                 $('#rejectButton').data('request-id', requestId);
@@ -340,7 +340,37 @@
                     url: '/ticketDetails/' + requestId,
                     method: 'GET',
                     success: function(response) {
-                        if (!response || !response.pr_requests || !Array.isArray(response.pr_requests)) {
+                        $('#materialDataForm').empty();
+                        let itemCount = 1;
+                        let materialCount = 0;
+
+                        // === Optional Document Section ===
+                        $('#existingDocuments').empty();
+
+                        if (response.documents && response.documents.length > 0) {
+                            $('#enableDocumentSection').prop('checked', true);
+                            $('#documentSection').show();
+
+                            response.documents.forEach(function(doc) {
+                                $('#existingDocuments').append(`
+                                    <div class="d-flex align-items-center justify-content-between border rounded p-2 mb-2">
+                                        <div>
+                                            <i class="bi bi-file-earmark-text me-2"></i>
+                                            <a href="${doc.url}" target="_blank">${doc.name}</a>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-document" data-doc-id="${doc.id}">
+                                            <i class="bi bi-x-lg"></i> Remove Document
+                                        </button>
+                                    </div>
+                                `);
+                            });
+                        } else {
+                            $('#enableDocumentSection').prop('checked', false);
+                            $('#documentSection').hide();
+                        }
+
+                        // === Validate Material Data ===
+                        if (!response.pr_requests || !Array.isArray(response.pr_requests)) {
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Error',
@@ -349,32 +379,34 @@
                             return;
                         }
 
-                        $('#typeNumber').val(response.advance_cash || '');
-                        $('#materialDataForm').empty();
-                        let itemCount = 1;
-                        let materialCount = 0;
-
+                        // === Loop Each Material ===
                         $.each(response.pr_requests, function(index, pr_request) {
-                            if (!pr_request || !pr_request.partlist_id) {
+                            if (!pr_request || typeof pr_request !== 'object' || !pr_request.partlist_id) {
                                 return;
                             }
 
+                            const id = pr_request.partlist_id;
                             $.ajax({
-                                url: '/retrieve-part-name/' + pr_request.partlist_id,
+                                url: '/retrieve-part-name/' + id,
                                 method: 'GET',
-                                success: function(data) {
-                                    const partName = data.part_name || 'N/A';
-                                    const availableStock = parseInt(data.stock) || 0;
+                                success: function(partData) {
+                                    const partName = partData.part_name || '';
+                                    if (!partName) return;
+
+                                    const availableStock = parseInt(partData.stock) || 0;
                                     const initialQuantity = parseInt(pr_request.qty) || 0;
                                     const totalStock = initialQuantity + availableStock;
 
                                     const cardHeader = `
-                                        <div class="card-header d-flex justify-content-between align-items-center">
-                                            <h5 class="mb-0">Part Request No. ${itemCount}</h5>
-                                            <button type="button" class="btn-close remove-part" data-part-id="${pr_request.id}" ${response.pr_requests.length === 1 ? 'disabled' : ''}></button>
+                                        <div class="card-header d-flex justify-content-between align-items-center bg-light border-bottom">
+                                            <h5 class="mb-0 text-primary fw-semibold">Part Request No. ${itemCount}</h5>
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-material" data-part-id="${pr_request.id}">
+                                                <i class="bi bi-trash"></i> Remove Material
+                                            </button>
                                         </div>`;
+
                                     const row = `
-                                        <div class="card mb-3 border-primary">
+                                        <div class="material-card card mb-3 border border-2 border-secondary shadow-sm">
                                             ${cardHeader}
                                             <div class="card-body">
                                                 <div class="mb-3">
@@ -391,15 +423,15 @@
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Requested Quantity</label>
-                                                    <input type="number" class="form-control requested-quantity" name="pr_request[${materialCount}][qty]" value="${pr_request.qty || ''}" data-initial-quantity="${pr_request.qty || 0}" data-total-stock="${totalStock}" data-pr-id="${pr_request.id}" data-available-stock="${availableStock}" min="0">
+                                                    <input type="number" class="form-control requested-quantity" name="pr_request[${materialCount}][qty]" value="${pr_request.qty || '1'}" data-initial-quantity="${pr_request.qty || 0}" data-total-stock="${totalStock}" data-pr-id="${pr_request.id}" data-available-stock="${availableStock}" min="0">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Amount / 1 Item (Rp) <span class="text-muted">(Optional)</span></label>
-                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][amount]" value="${pr_request.amount || ''}">
+                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][amount]" value="${pr_request.amount || '0'}">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Other Cost</label>
-                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][other_cost]" value="${pr_request.other_cost || ''}">
+                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][other_cost]" value="${pr_request.other_cost || '0'}">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Vendor <span class="text-danger">*</span></label>
@@ -411,23 +443,19 @@
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Tag</label>
-                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][tag]" value="${pr_request.tag || ''}">
+                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][tag]" value="${pr_request.tag || '0'}">
                                                 </div>
                                                 <input type="hidden" name="pr_request[${materialCount}][id]" value="${pr_request.id || ''}">
                                                 <input type="hidden" name="pr_request[${materialCount}][ticket_id]" value="${pr_request.ticket_id || ''}">
-                                                <input type="hidden" name="pr_request[${materialCount}][partlist_id]" value="${pr_request.partlist_id || ''}">
                                             </div>
                                         </div>`;
                                     $('#materialDataForm').append(row);
+
                                     itemCount++;
                                     materialCount++;
                                 },
                                 error: function(xhr) {
-                                    Swal.fire({
-                                        icon: 'error',
-                                        title: 'Error',
-                                        text: 'Failed to fetch part name for partlist_id: ' + pr_request.partlist_id
-                                    });
+                                    Swal.fire('Error', 'Failed to retrieve part name', 'error');
                                 },
                                 complete: function() {
                                     if (index === response.pr_requests.length - 1) {
@@ -446,10 +474,41 @@
                         });
                     },
                     error: function(xhr) {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: xhr.responseJSON?.error || 'Failed to load ticket details.'
+                        Swal.fire('Error', 'Failed to retrieve ticket details', 'error');
+                    }
+                });
+            });
+
+            // === Document Toggle ===
+            $('#enableDocumentSection').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#documentSection').slideDown();
+                } else {
+                    $('#documentSection').slideUp();
+                }
+            });
+
+            // === Remove Document Handler ===
+            $(document).on('click', '.remove-document', function() {
+                const docId = $(this).data('doc-id');
+                Swal.fire({
+                    title: 'Remove document?',
+                    text: 'This cannot be undone.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, remove it',
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: '/remove-document/' + docId,
+                            method: 'DELETE',
+                            success: function() {
+                                Swal.fire('Deleted!', 'Document removed.', 'success');
+                                $(`[data-doc-id="${docId}"]`).closest('div.d-flex').remove();
+                            },
+                            error: function() {
+                                Swal.fire('Error', 'Failed to remove document.', 'error');
+                            }
                         });
                     }
                 });

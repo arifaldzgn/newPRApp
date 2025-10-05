@@ -4,6 +4,20 @@
 @section('description', 'Pending Purchase Request page')
 
 @section('content')
+<style>
+    .material-card {
+        border-radius: 8px;
+        overflow: hidden;
+        transition: all 0.2s ease;
+    }
+    .material-card:hover {
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .material-card + .material-card {
+        margin-top: 1rem;
+    }
+
+</style>
     <!-- begin:: Content -->
     <div class="row">
         <div class="col-12">
@@ -147,22 +161,47 @@
     <div id="materialModal" class="modal fade" tabindex="-1" role="dialog">
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Material Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header">
+                <h5 class="modal-title">Material Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <form id="materialDataForm">
+                <!-- Material cards will be appended here dynamically -->
+
+                <!-- Optional Document Section -->
+                <hr class="my-4">
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="enableDocumentSection">
+                    <label class="form-check-label fw-semibold" for="enableDocumentSection">
+                    Attach Additional Document (Optional)
+                    </label>
                 </div>
-                <div class="modal-body">
-                    <form id="materialDataForm"></form>
+
+                <div id="documentSection" style="display: none;">
+                    <div id="existingDocuments" class="mb-3"></div>
+                    <div class="mb-3">
+                    <label class="form-label">Upload New Document</label>
+                    <input type="file" class="form-control" name="additional_documents[]" multiple>
+                    <small class="form-text text-muted">
+                        You can attach receipts or related supporting documents.
+                    </small>
+                    </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-success" id="approveButton">Approve</button>
-                    <button type="button" class="btn btn-danger" id="rejectButton">Reject</button>
-                    <button type="button" class="btn btn-primary" id="saveMaterialChanges">Save Changes</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="approveButton">Approve</button>
+                <button type="button" class="btn btn-danger" id="rejectButton">Reject</button>
+                <button type="button" class="btn btn-primary" id="saveMaterialChanges">Save Changes</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
             </div>
         </div>
     </div>
+
 
     <div id="loadingSpinner" style="display: none; text-align: center;">Loading...</div>
     <!-- end:: Content -->
@@ -436,6 +475,32 @@
                         let itemCount = 1;
                         let materialCount = 0;
 
+                        // === Optional Document Section ===
+                        $('#existingDocuments').empty();
+
+                        if (response.documents && response.documents.length > 0) {
+                            $('#enableDocumentSection').prop('checked', true);
+                            $('#documentSection').show();
+
+                            response.documents.forEach(function(doc) {
+                                $('#existingDocuments').append(`
+                                    <div class="d-flex align-items-center justify-content-between border rounded p-2 mb-2">
+                                        <div>
+                                            <i class="bi bi-file-earmark-text me-2"></i>
+                                            <a href="${doc.url}" target="_blank">${doc.name}</a>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-document" data-doc-id="${doc.id}">
+                                            <i class="bi bi-x-lg"></i> Remove Document
+                                        </button>
+                                    </div>
+                                `);
+                            });
+                        } else {
+                            $('#enableDocumentSection').prop('checked', false);
+                            $('#documentSection').hide();
+                        }
+
+                        // === Validate Material Data ===
                         if (!response.pr_requests || !Array.isArray(response.pr_requests)) {
                             Swal.fire({
                                 icon: 'error',
@@ -445,6 +510,7 @@
                             return;
                         }
 
+                        // === Loop Each Material ===
                         $.each(response.pr_requests, function(index, pr_request) {
                             if (!pr_request || typeof pr_request !== 'object' || !pr_request.partlist_id) {
                                 return;
@@ -463,12 +529,15 @@
                                     const totalStock = initialQuantity + availableStock;
 
                                     const cardHeader = `
-                                        <div class="card-header d-flex justify-content-between align-items-center">
-                                            <h5 class="mb-0">Part Request No. ${itemCount}</h5>
-                                            <button type="button" class="btn-close remove-part" data-part-id="${pr_request.id}"></button>
+                                        <div class="card-header d-flex justify-content-between align-items-center bg-light border-bottom">
+                                            <h5 class="mb-0 text-primary fw-semibold">Part Request No. ${itemCount}</h5>
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-part" data-part-id="${pr_request.id}">
+                                                <i class="bi bi-trash"></i> Remove Material
+                                            </button>
                                         </div>`;
+
                                     const row = `
-                                        <div class="card mb-3 border-primary">
+                                        <div class="material-card card mb-3 border border-2 border-secondary shadow-sm">
                                             ${cardHeader}
                                             <div class="card-body">
                                                 <div class="mb-3">
@@ -512,6 +581,7 @@
                                             </div>
                                         </div>`;
                                     $('#materialDataForm').append(row);
+
                                     itemCount++;
                                     materialCount++;
                                 },
@@ -539,6 +609,42 @@
                     }
                 });
             });
+
+            // === Document Toggle ===
+            $('#enableDocumentSection').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#documentSection').slideDown();
+                } else {
+                    $('#documentSection').slideUp();
+                }
+            });
+
+            // === Remove Document Handler ===
+            $(document).on('click', '.remove-document', function() {
+                const docId = $(this).data('doc-id');
+                Swal.fire({
+                    title: 'Remove document?',
+                    text: 'This cannot be undone.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, remove it',
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: '/remove-document/' + docId,
+                            method: 'DELETE',
+                            success: function() {
+                                Swal.fire('Deleted!', 'Document removed.', 'success');
+                                $(`[data-doc-id="${docId}"]`).closest('div.d-flex').remove();
+                            },
+                            error: function() {
+                                Swal.fire('Error', 'Failed to remove document.', 'error');
+                            }
+                        });
+                    }
+                });
+            });
+
 
             // Save material changes
             $('#saveMaterialChanges').click(function() {
