@@ -217,6 +217,8 @@
 
     <script>
         $(document).ready(function() {
+            let deletedMaterials = []; // Declare at higher scope
+
             const dataTable = $('#datatable').DataTable({
                 responsive: true,
                 stateSave: true,
@@ -422,7 +424,7 @@
                 const arrayCount = $(this).data('array-count');
                 const requiresStockReduction = $(`input[name="pr_request[${arrayCount}][requires_stock_reduction]"]`).val();
 
-                if (requiresStockReduction !== "false" && (isNaN(qty) || qty <= 0)) {
+                if (requiresStockReduction !== "false" && (isNaN(qty) || qty <= 0) ) {
                     Swal.fire({
                         icon: 'error',
                         title: 'Invalid Quantity',
@@ -463,6 +465,7 @@
 
             // View/Edit details
             $('.updateBtn').click(function() {
+                deletedMaterials = []; // Reset on each open
                 const requestId = $(this).data('request-id');
                 $('#approveButton').data('request-id', requestId);
                 $('#rejectButton').data('request-id', requestId);
@@ -537,7 +540,7 @@
                                         </div>`;
 
                                     const row = `
-                                        <div class="material-card card mb-3 border border-2 border-secondary shadow-sm">
+                                        <div class="material-card card mb-3 border border-2 border-secondary shadow-sm" data-pr-id="${pr_request.id}">
                                             ${cardHeader}
                                             <div class="card-body">
                                                 <div class="mb-3">
@@ -554,7 +557,7 @@
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Requested Quantity</label>
-                                                    <input type="number" class="form-control requested-quantity" name="pr_request[${materialCount}][qty]" value="${pr_request.qty || '1'}" data-initial-quantity="${pr_request.qty || 0}" data-total-stock="${totalStock}" data-pr-id="${pr_request.id}" data-available-stock="${availableStock}" min="0">
+                                                    <input type="number" class="form-control requested-quantity" name="pr_request[${materialCount}][qty]" value="${pr_request.qty || '1'}" data-initial-quantity="${pr_request.qty || 0}" data-total-stock="${totalStock}" data-available-stock="${availableStock}" min="0">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Amount / 1 Item (Rp) <span class="text-muted">(Optional)</span></label>
@@ -648,11 +651,24 @@
 
             // Save material changes
             $('#saveMaterialChanges').click(function() {
-                const formData = $('#materialDataForm').serialize();
+                const remainingCards = $('.material-card');
+                if (remainingCards.length < 1) {
+                    Swal.fire('Cannot Save', 'At least one material must remain.', 'warning');
+                    return;
+                }
+                let form = document.getElementById('materialDataForm');
+                let formData = new FormData(form);
+                if (deletedMaterials.length > 0) {
+                    deletedMaterials.forEach(id => {
+                        formData.append('deleted_materials[]', id);
+                    });
+                }
                 $.ajax({
                     url: '/updateTicket',
                     method: 'POST',
                     data: formData,
+                    contentType: false,
+                    processData: false,
                     headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                     success: function(response) {
                         Swal.fire({
@@ -756,6 +772,13 @@
 
             // Remove part
             $(document).on('click', '.remove-part', function() {
+                const cards = $('.material-card');
+                if (cards.length <= 1) {
+                    Swal.fire('Cannot Remove', 'At least one material must remain.', 'warning');
+                    return;
+                }
+                const partId = $(this).data('part-id');
+                deletedMaterials.push(partId);
                 $(this).closest('.card').remove();
             });
 

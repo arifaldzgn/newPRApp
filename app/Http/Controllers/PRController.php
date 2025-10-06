@@ -333,6 +333,8 @@ class PRController extends Controller
                              ->get();
         }
 
+        // return $dataT;
+
         return view('pr.pending_pr', [
             'dataT' => $dataT
         ]);
@@ -690,14 +692,63 @@ class PRController extends Controller
     public function update(Request $request)
     {
         try {
+            $ticketId = null;
+            $submittedIds = [];
             $processedIds = [];
 
-            foreach ($request->pr_request as $pRQ) {
-                if (in_array($pRQ['id'], $processedIds)) {
+            // Collect submitted IDs and determine ticket ID
+            foreach ($request->pr_request ?? [] as $pRQ) {
+                if (isset($pRQ['id']) && !in_array($pRQ['id'], $submittedIds)) {
+                    $submittedIds[] = $pRQ['id'];
+                }
+                if (!$ticketId && isset($pRQ['ticket_id'])) {
+                    $ticketId = $pRQ['ticket_id'];
+                }
+            }
+
+            if (!$ticketId) {
+                return response()->json(['error' => 'Ticket ID not found'], 400);
+            }
+
+            // Get all existing PR requests for this ticket
+            $existingPrRequests = prRequest::where('ticket_id', $ticketId)->get();
+            $existingIds = $existingPrRequests->pluck('id')->toArray();
+
+            // Identify IDs to delete (existing but not submitted)
+            $idsToDelete = array_diff($existingIds, $submittedIds);
+
+            // Delete removed PR requests and handle stock if necessary
+            foreach ($idsToDelete as $deleteId) {
+                $prToDelete = prRequest::find($deleteId);
+                if ($prToDelete) {
+                    // Optional: Handle stock addition back if previously deducted
+                    // For example, if PR deducts stock on creation, add back
+                    $getPart = PartList::find($prToDelete->partlist_id);
+                    if ($getPart && $getPart->requires_stock_reduction !== "false") {
+                        PartStock::create([
+                            'part_list_id' => $prToDelete->partlist_id,
+                            'quantity'     => $prToDelete->qty,
+                            'operations'   => 'plus', // Add back to stock
+                            'source'       => 'PR Request Deleted',
+                            'source_type'  => 'pr_request_delete',
+                            'source_ref'   => $prToDelete->prTicket->ticketCode
+                        ]);
+                    }
+                    $prToDelete->delete();
+                }
+            }
+
+            // Update submitted PR requests
+            foreach ($request->pr_request ?? [] as $pRQ) {
+                if (!isset($pRQ['id']) || in_array($pRQ['id'], $processedIds)) {
                     continue;
                 }
 
                 $newRequest = prRequest::find($pRQ['id']);
+                if (!$newRequest) {
+                    continue; // Skip if not found
+                }
+
                 $operations = ($pRQ['qty'] < $newRequest->qty) ? 'plus' : 'minus';
 
                 if ($pRQ['qty'] != $newRequest->qty) {
@@ -729,28 +780,28 @@ class PRController extends Controller
                 ]);
 
                 $processedIds[] = $pRQ['id'];
-
-                $revised = prTicket::findOrFail($pRQ['ticket_id']);
-                $revised->status = 'Revised';
-                $revised->advance_cash = $request->input('advance_cash');
-                $revised->save();
-
-                if ($revised->save()) {
-                    $data = ['ticket' => $revised->ticketCode, 'status' => $revised->status];
-                    $userHodId = $revised->user->deptList->user_hod_id;
-                    $userDeptHodEmail = User::find($userHodId)->email;
-
-                    Mail::to($userDeptHodEmail)->send(new TestEmail($data));
-
-                    // Notify user
-                    Notification::create([
-                        'user_id' => $revised->user_id,
-                        'pr_ticket_id' => $revised->id,
-                        'status' => $revised->status,
-                        'message' => "Your PR request {$revised->ticketCode} has been Revised. Please review the changes."
-                    ]);
-                }
             }
+
+            // Update ticket status and advance cash
+            $revised = prTicket::findOrFail($ticketId);
+            $revised->status = 'Revised';
+            $revised->advance_cash = $request->input('advance_cash');
+            $revised->save();
+
+            // Send email and notification
+            $data = ['ticket' => $revised->ticketCode, 'status' => $revised->status];
+            $userHodId = $revised->user->deptList->user_hod_id;
+            $userDeptHodEmail = User::find($userHodId)->email;
+
+            Mail::to($userDeptHodEmail)->send(new TestEmail($data));
+
+            // Notify user
+            Notification::create([
+                'user_id' => $revised->user_id,
+                'pr_ticket_id' => $revised->id,
+                'status' => $revised->status,
+                'message' => "Your PR request {$revised->ticketCode} has been Revised. Please review the changes."
+            ]);
 
             return response()->json(['message' => 'Request successfully saved']);
         } catch (\Exception $e) {
@@ -761,7 +812,51 @@ class PRController extends Controller
     public function updateR(Request $request)
     {
         try {
+            $ticketId = null;
+            $submittedIds = [];
             $processedIds = [];
+
+            // Collect submitted IDs and determine ticket ID
+            foreach ($request->pr_request ?? [] as $pRQ) {
+                if (isset($pRQ['id']) && !in_array($pRQ['id'], $submittedIds)) {
+                    $submittedIds[] = $pRQ['id'];
+                }
+                if (!$ticketId && isset($pRQ['ticket_id'])) {
+                    $ticketId = $pRQ['ticket_id'];
+                }
+            }
+
+            if (!$ticketId) {
+                return response()->json(['error' => 'Ticket ID not found'], 400);
+            }
+
+            // Get all existing PR requests for this ticket
+            $existingPrRequests = prRequest::where('ticket_id', $ticketId)->get();
+            $existingIds = $existingPrRequests->pluck('id')->toArray();
+
+            // Identify IDs to delete (existing but not submitted)
+            $idsToDelete = array_diff($existingIds, $submittedIds);
+
+            // Delete removed PR requests and handle stock if necessary
+            foreach ($idsToDelete as $deleteId) {
+                $prToDelete = prRequest::find($deleteId);
+                if ($prToDelete) {
+                    // Optional: Handle stock addition back if previously deducted
+                    // For example, if PR deducts stock on creation, add back
+                    $getPart = PartList::find($prToDelete->partlist_id);
+                    if ($getPart && $getPart->requires_stock_reduction !== "false") {
+                        PartStock::create([
+                            'part_list_id' => $prToDelete->partlist_id,
+                            'quantity'     => $prToDelete->qty,
+                            'operations'   => 'plus', // Add back to stock
+                            'source'       => 'PR Request Deleted',
+                            'source_type'  => 'pr_request_delete',
+                            'source_ref'   => $prToDelete->prTicket->ticketCode
+                        ]);
+                    }
+                    $prToDelete->delete();
+                }
+            }
 
             foreach ($request->pr_request as $pRQ) {
                 if (in_array($pRQ['id'], $processedIds)) {

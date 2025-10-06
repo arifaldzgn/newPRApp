@@ -86,6 +86,8 @@
 
     <script>
         $(document).ready(function() {
+            let deletedMaterials = []; // Declare at higher scope
+
             const dataTable = $('#datatable').DataTable({
                 responsive: true,
                 stateSave: true,
@@ -332,6 +334,7 @@
 
             // Update button handler
            $('.updateBtn').click(function() {
+                deletedMaterials = []; // Reset on each open
                 const requestId = $(this).data('request-id');
                 $('#approveButton').data('request-id', requestId);
                 $('#rejectButton').data('request-id', requestId);
@@ -400,7 +403,7 @@
                                     const cardHeader = `
                                         <div class="card-header d-flex justify-content-between align-items-center bg-light border-bottom">
                                             <h5 class="mb-0 text-primary fw-semibold">Part Request No. ${itemCount}</h5>
-                                            <button type="button" class="btn btn-sm btn-outline-danger remove-material" data-part-id="${pr_request.id}">
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-part" data-part-id="${pr_request.id}">
                                                 <i class="bi bi-trash"></i> Remove Material
                                             </button>
                                         </div>`;
@@ -516,15 +519,24 @@
 
             // Save material changes
             $('#saveMaterialChanges').click(function() {
-                $(this).prop('disabled', true);
-                const formData = $('#materialDataForm').serialize();
-                const advanceCash = $('#typeNumber').val();
-                const finalFormData = formData + '&advance_cash=' + encodeURIComponent(advanceCash);
-
+                const remainingCards = $('.material-card');
+                if (remainingCards.length < 1) {
+                    Swal.fire('Cannot Save', 'At least one material must remain.', 'warning');
+                    return;
+                }
+                let form = document.getElementById('materialDataForm');
+                let formData = new FormData(form);
+                if (deletedMaterials.length > 0) {
+                    deletedMaterials.forEach(id => {
+                        formData.append('deleted_materials[]', id);
+                    });
+                }
                 $.ajax({
                     url: '/updateTicketR',
                     method: 'POST',
-                    data: finalFormData,
+                    data: formData,
+                    contentType: false,
+                    processData: false,
                     headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                     success: function(response) {
                         Swal.fire({
@@ -534,23 +546,7 @@
                         }).then(() => location.reload());
                     },
                     error: function(xhr) {
-                        const errorMessage = xhr.responseJSON?.error || 'Failed to update material data';
-                        if (xhr.status === 422) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error',
-                                text: xhr.responseJSON?.error || 'Invalid input data provided'
-                            });
-                        } else {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error',
-                                text: errorMessage
-                            });
-                        }
-                    },
-                    complete: function() {
-                        $('#saveMaterialChanges').prop('disabled', false);
+                        Swal.fire('Error', 'Failed to update material data', 'error');
                     }
                 });
             });
@@ -664,32 +660,14 @@
 
             // Remove part
             $(document).on('click', '.remove-part', function() {
-                if ($(this).is(':disabled')) {
+                const cards = $('.material-card');
+                if (cards.length <= 1) {
+                    Swal.fire('Cannot Remove', 'At least one material must remain.', 'warning');
                     return;
                 }
                 const partId = $(this).data('part-id');
-                const cardToRemove = $(this).closest('.card');
-
-                $.ajax({
-                    url: '/delete-part/' + partId,
-                    method: 'DELETE',
-                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                    success: function(response) {
-                        cardToRemove.remove();
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Success',
-                            text: 'Part deleted successfully'
-                        });
-                    },
-                    error: function(xhr) {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: xhr.responseJSON?.error || 'Failed to delete part'
-                        });
-                    }
-                });
+                deletedMaterials.push(partId);
+                $(this).closest('.card').remove();
             });
 
             // Quantity validation in modal
