@@ -8,6 +8,7 @@ use App\Models\assetCode;
 use App\Models\PartStock;
 use App\Models\prRequest;
 use App\Models\PrLogHistory;
+use App\Models\PartListLogHistories;
 use Illuminate\Support\Facades\Log;
 
 

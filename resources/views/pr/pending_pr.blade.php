@@ -162,15 +162,13 @@
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Material Details</h5>
+                <h5 class="modal-title">Requested Details</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
             <div class="modal-body">
                 <form id="materialDataForm">
-                <!-- Material cards will be appended here dynamically -->
 
-                <!-- Optional Document Section -->
                 <hr class="my-4">
                 <div class="form-check mb-3">
                     <input class="form-check-input" type="checkbox" id="enableDocumentSection">
@@ -190,11 +188,13 @@
                     </div>
                 </div>
                 </form>
-            </div>
+            </div>     
 
             <div class="modal-footer">
-                <button type="button" class="btn btn-success" id="approveButton">Approve</button>
-                <button type="button" class="btn btn-danger" id="rejectButton">Reject</button>
+                @if(auth()->user()->role === 'admin' || auth()->user()->role === 'pic' || auth()->user()->role === 'hod' || auth()->user()->role === 'purchasing')
+                    <button type="button" class="btn btn-success" id="approveButton">Approve</button>
+                    <button type="button" class="btn btn-danger" id="rejectButton">Reject</button>
+                @endif
                 <button type="button" class="btn btn-primary" id="saveMaterialChanges">Save Changes</button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
@@ -718,28 +718,42 @@
             $('#approveButton').click(function() {
                 const requestId = $(this).data('request-id');
                 const userRole = window.userRole || '{{ auth()->user()->role ?? "guest" }}';
-                let approveUrl;
 
-                if (userRole === 'purchasing' || userRole === 'pic' || userRole === 'admin') {
-                    approveUrl = '/ticket/' + requestId + '/purchasing_approve';
-                } else if (userRole === 'hod' || userRole === 'admin') {
-                    approveUrl = '/ticket/' + requestId + '/approve';
-                } else {
-                    Swal.fire('Error', 'You are not authorized to approve this ticket', 'error');
-                    return;
-                }
-
+                // Fetch ticket status via AJAX to ensure we have the latest status
                 $.ajax({
-                    url: approveUrl,
-                    method: 'PUT',
-                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                    url: '/ticketDetails/' + requestId,
+                    method: 'GET',
                     success: function(response) {
-                        Swal.fire('Success', response.message, 'success').then(() => location.reload());
-                        $('#materialModal').modal('hide');
+                        const ticketStatus = response.ticket.status;
+
+                        let approveUrl;
+                        if ((userRole === 'hod' || userRole === 'admin' || userRole === 'pic') && 
+                            (ticketStatus === 'Pending' || ticketStatus === 'Revised')) {
+                            approveUrl = '/ticket/' + requestId + '/approve';
+                        } else if ((userRole === 'purchasing' || userRole === 'admin') && 
+                                ticketStatus === 'HOD_Approved') {
+                            approveUrl = '/ticket/' + requestId + '/purchasing_approve';
+                        } else {
+                            Swal.fire('Error', 'You are not authorized to approve this ticket or the ticket status is invalid', 'error');
+                            return;
+                        }
+
+                        $.ajax({
+                            url: approveUrl,
+                            method: 'PUT',
+                            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                            success: function(response) {
+                                Swal.fire('Success', response.message, 'success').then(() => location.reload());
+                                $('#materialModal').modal('hide');
+                            },
+                            error: function(xhr) {
+                                const errorMessage = xhr.responseJSON?.error || 'Failed to approve request';
+                                Swal.fire('Error', errorMessage, 'error');
+                            }
+                        });
                     },
                     error: function(xhr) {
-                        const errorMessage = xhr.responseJSON?.error || 'Failed to approve request';
-                        Swal.fire('Error', errorMessage, 'error');
+                        Swal.fire('Error', 'Failed to retrieve ticket details', 'error');
                     }
                 });
             });

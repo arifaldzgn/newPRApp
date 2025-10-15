@@ -80,6 +80,11 @@ class PRController extends Controller
     public function create(Request $request)
     {
         try {
+            //Checking roles for creation - only admins, HODs, or clerks can create
+            if (!in_array(auth()->user()->role, ['admin', 'hod', 'clerk','regular', 'purchasing', 'pic'])) {
+                return response()->json(['error' => 'Unauthorized to create ticket'], 403);
+            }
+
             Log::info('Starting PR creation', ['request' => $request->all()]);
 
             $validatedData = $request->validate([
@@ -403,9 +408,47 @@ class PRController extends Controller
     public function destroy($id)
     {
         try {
+            // Checking roles for deletion - admin, owner, or HOD only
+            $ticket = prTicket::findOrFail($id);
+            $user = auth()->user();
+            $isOwner = $ticket->user_id === $user->id;
+            $dept = deptList::where('user_hod_id', $user->id)->first();
+            $isHod = ($user->role === 'hod') && $dept && User::where('id', $ticket->user_id)->where('dept_id', $dept->id)->exists();
+            if ($user->role !== 'admin' && !$isOwner && !$isHod) {
+                return response()->json(['error' => 'Unauthorized to delete this ticket'], 403);
+            }
+
             DB::beginTransaction();
 
+            // MOVED: Load ticket with relations once (reuse for stock and notifications)
             $ticket = prTicket::with('prRequest')->findOrFail($id);
+
+            // MOVED: Create notifications BEFORE delete (avoids FK constraint on commit)
+            Notification::create([
+                'user_id' => $ticket->user_id,
+                'pr_ticket_id' => $ticket->id,
+                'status' => 'Deleted',
+                'message' => "Your PR request {$ticket->ticketCode} has been deleted."
+            ]);
+
+            $hodId = $ticket->user->deptList->user_hod_id ?? null;
+            if ($hodId) {
+                Notification::create([
+                    'user_id' => $hodId,
+                    'pr_ticket_id' => $ticket->id,
+                    'status' => 'Deleted',
+                    'message' => "PR request {$ticket->ticketCode} from {$ticket->user->name} has been deleted."
+                ]);
+            }
+
+            if ($ticket->purchasing_approved_user_id) {
+                Notification::create([
+                    'user_id' => $ticket->purchasing_approved_user_id,
+                    'pr_ticket_id' => $ticket->id,
+                    'status' => 'Deleted',
+                    'message' => "PR request {$ticket->ticketCode} has been deleted."
+                ]);
+            }
 
             $totalQuantities = $ticket->prRequest->groupBy('partlist_id')->map(function ($requests) {
                 return $requests->sum('qty');
@@ -446,20 +489,31 @@ class PRController extends Controller
 
     public function destroyPart($id)
     {
-         // Find the prRequest instance
-         $part = prRequest::findOrFail($id);
+        // ADD: Checking roles for part deletion - admin, owner, or HOD only
+        $part = prRequest::findOrFail($id);
+        $ticket = prTicket::findOrFail($part->ticket_id);
+        $user = auth()->user();
+        $isOwner = $ticket->user_id === $user->id;
+        $dept = deptList::where('user_hod_id', $user->id)->first();
+        $isHod = ($user->role === 'hod') && $dept && User::where('id', $ticket->user_id)->where('dept_id', $dept->id)->exists();
+        if ($user->role !== 'admin' && !$isOwner && !$isHod) {
+            return response()->json(['error' => 'Unauthorized to delete this part'], 403);
+        }
 
-         // Retrieve the required data
-         $quantity = $part->qty;
-         $partlist_id = $part->partlist_id;
-         $ticketId = $part->ticket_id; // Assuming prRequest has a relationship to prTicket
-         $ticketCode = prTicket::find($ticketId)->ticketCode;
+        // Find the prRequest instance
+        $part = prRequest::findOrFail($id);
 
-         // Store the data in PartStock
-         $getPart = PartList::find($partlist_id);
-         $getFalse = $getPart->requires_stock_reduction;
+        // Retrieve the required data
+        $quantity = $part->qty;
+        $partlist_id = $part->partlist_id;
+        $ticketId = $part->ticket_id; 
+        $ticketCode = prTicket::find($ticketId)->ticketCode;
 
-         if($getFalse !== "false"){
+        // Store the data in PartStock
+        $getPart = PartList::find($partlist_id);
+        $getFalse = $getPart->requires_stock_reduction;
+
+        if($getFalse !== "false"){
             PartStock::create([
                 'part_list_id' => $partlist_id,
                 'quantity'     => $quantity,
@@ -468,18 +522,23 @@ class PRController extends Controller
                 'source_type'  => 'pr_request_cancel',
                 'source_ref'   => $ticketCode
             ]);
-         }
+        }
 
-         // Delete the prRequest instance
-         $part->delete();
+        $part->delete();
     }
 
     public function approveTicket($requestId)
     {
         $request = prTicket::findOrFail($requestId);
 
-        if (auth()->user()->id !== $request->approved_user_id && auth()->user()->role !== 'admin') {
+        // Allow hod, admin, or pic to approve if status is Pending or Revised
+        if (!in_array(auth()->user()->role, ['hod', 'admin', 'pic', 'purchasing'])) {
             return response()->json(['error' => 'Unauthorized to approve this ticket'], 403);
+        }
+
+        // Ensure ticket is in Pending or Revised status
+        if (!in_array($request->status, ['Pending', 'Revised'])) {
+            return response()->json(['error' => 'Ticket must be in Pending or Revised status to be approved by HOD'], 400);
         }
 
         $request->status = 'HOD_Approved';
@@ -710,6 +769,16 @@ class PRController extends Controller
                 return response()->json(['error' => 'Ticket ID not found'], 400);
             }
 
+            // ADD: Checking roles for update - admin, owner, or HOD only
+            $ticket = prTicket::findOrFail($ticketId);
+            $user = auth()->user();
+            $isOwner = $ticket->user_id === $user->id;
+            $dept = deptList::where('user_hod_id', $user->id)->first();
+            $isHod = ($user->role === 'hod') && $dept && User::where('id', $ticket->user_id)->where('dept_id', $dept->id)->exists();
+            if ($user->role !== 'admin' && !$isOwner && !$isHod) {
+                return response()->json(['error' => 'Unauthorized to update this ticket'], 403);
+            }
+
             // Get all existing PR requests for this ticket
             $existingPrRequests = prRequest::where('ticket_id', $ticketId)->get();
             $existingIds = $existingPrRequests->pluck('id')->toArray();
@@ -830,6 +899,16 @@ class PRController extends Controller
                 return response()->json(['error' => 'Ticket ID not found'], 400);
             }
 
+            // ADD: Checking roles for update - admin, owner, or HOD only
+            $ticket = prTicket::findOrFail($ticketId);
+            $user = auth()->user();
+            $isOwner = $ticket->user_id === $user->id;
+            $dept = deptList::where('user_hod_id', $user->id)->first();
+            $isHod = ($user->role === 'hod') && $dept && User::where('id', $ticket->user_id)->where('dept_id', $dept->id)->exists();
+            if ($user->role !== 'admin' && !$isOwner && !$isHod) {
+                return response()->json(['error' => 'Unauthorized to update this ticket'], 403);
+            }
+
             // Get all existing PR requests for this ticket
             $existingPrRequests = prRequest::where('ticket_id', $ticketId)->get();
             $existingIds = $existingPrRequests->pluck('id')->toArray();
@@ -908,6 +987,25 @@ class PRController extends Controller
                     $userDeptHodEmail = User::find($userHodId)->email;
 
                     Mail::to($userDeptHodEmail)->send(new TestEmail($data));
+
+                    // ADD: Notify user for Revised status
+                    Notification::create([
+                        'user_id' => $revised->user_id,
+                        'pr_ticket_id' => $revised->id,
+                        'status' => $revised->status,
+                        'message' => "Your PR request {$revised->ticketCode} has been Revised. Please review the changes."
+                    ]);
+
+                    // ADD: Optionally notify HOD for Revised status
+                    $hodId = $revised->user->deptList->user_hod_id ?? null;
+                    if ($hodId) {
+                        Notification::create([
+                            'user_id' => $hodId,
+                            'pr_ticket_id' => $revised->id,
+                            'status' => $revised->status,
+                            'message' => "PR request {$revised->ticketCode} from {$revised->user->name} has been Revised and needs your review."
+                        ]);
+                    }
                 }
             }
             return response()->json(['message' => 'Request successfully saved']);
