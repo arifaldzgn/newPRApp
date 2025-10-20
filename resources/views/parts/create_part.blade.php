@@ -419,7 +419,7 @@
                     </div>
                     <div class="form-group mb-3">
                         <label for="quantity" class="form-label">Stock Adjustment</label>
-                        <input type="number" class="form-control" id="quantity" name="quantity">
+                        <input type="number" class="form-control" id="quantity" name="quantity" value="0">
                         <small class="form-text text-muted">Enter positive numbers to increase stock, negative to decrease</small>
                     </div>
                     <input type="hidden" name="part_id" id="part_id">

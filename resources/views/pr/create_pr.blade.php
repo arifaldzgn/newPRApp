@@ -31,7 +31,7 @@
                                 <th>Ticket Code</th>
                                 <th>Requestor</th>
                                 <th>Status</th>
-                                <th>Actions</th>
+                                {{-- <th><center>Actions</center></th> --}}
                             </tr>
                         </thead>
                         <tbody>
@@ -51,10 +51,14 @@
                                             <span class="badge bg-success">{{ $dT->status }}</span>
                                         @endif
                                     </td>
-                                    <td>
-                                        <button class="btn btn-info btn-sm updateBtn" data-request-id="{{ $dT->id }}">View</button>
-                                        <button class="btn btn-danger btn-sm delete-btn" data-item-id="{{ $dT->id }}">Delete</button>
-                                    </td>
+                                    {{-- <td>
+                                        <center>
+                                        @if (!in_array($dT->status, ['HOD_Approved', 'Approved']))
+                                            <button class="btn btn-info btn-sm updateBtn" data-request-id="{{ $dT->id }}">View</button>
+                                            <button class="btn btn-danger btn-sm delete-btn" data-item-id="{{ $dT->id }}">Delete</button>
+                                        @endif
+                                        </center>
+                                    </td> --}}
                                 </tr>
                             @endforeach
                         </tbody>
@@ -209,8 +213,8 @@
                 },
                 columnDefs: [
                     { responsivePriority: 1, targets: 0 },
-                    { responsivePriority: 2, targets: 3 },
-                    { responsivePriority: 3, targets: 4 }
+                    { responsivePriority: 2, targets: 2 },
+                    { responsivePriority: 3, targets: 3 }
                 ]
             });
 
@@ -253,7 +257,7 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Vendor <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="pr_request[${arrayCount}][vendor]" value="">
+                                <input type="text" class="form-control" name="pr_request[${arrayCount}][vendor]" value="Etowa">
                                 <small class="form-text text-muted">Required. Specify the supplier or vendor, or write Etowa if there is none.</small>
                             </div>
                             <div class="mb-3">

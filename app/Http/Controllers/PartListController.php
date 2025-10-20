@@ -159,38 +159,39 @@ class PartListController extends Controller
 
     public function updatePartList(Request $request)
     {
-       $validatedData = $request->validate([
-        'part_id' => 'required|exists:part_lists,id',
-        'part_name' => 'required|string',
-        'category' => 'required|string',
-        'description' => 'nullable|string',
-        'quantity' => 'required|numeric',
+        $validatedData = $request->validate([
+            'part_id' => 'required|exists:part_lists,id',
+            'part_name' => 'required|string',
+            'category' => 'required|string',
+            'description' => 'nullable|string',
+            'quantity' => 'nullable|numeric', 
         ]);
 
-        $part = partList::findOrFail($validatedData['part_id']);
+        $part = PartList::findOrFail($validatedData['part_id']);
 
         $part->part_name = $validatedData['part_name'];
         $part->category = $validatedData['category'];
-        $part->type = $validatedData['description'];
+        $part->type = $validatedData['description'] ?? null;
         $part->save();
 
-        $operation = $validatedData['quantity'] >= 0 ? 'plus' : 'minus';
-        if($operation == 'plus'){
-            $source = 'Manual Adjustment';
-        }else{
-            $source = 'Manual Adjustment';
-        }
+        $quantity = $validatedData['quantity'] ?? 0;
 
-        $part->PartStock()->create([
-            'quantity' => abs($validatedData['quantity']),
-            'operations' => $operation,
-            'source' => $source,
-            'source_type' => 'Manual Update',
-            'source_ref' => auth()->id(),
-        ]);
+        // Only create stock record if quantity is non-zero
+        if ($quantity != 0) {
+            $operation = $quantity >= 0 ? 'plus' : 'minus';
+
+            $part->PartStock()->create([
+                'quantity' => abs($quantity),
+                'operations' => $operation,
+                'source' => 'Manual Adjustment',
+                'source_type' => 'Manual Update',
+                'source_ref' => auth()->id(),
+            ]);
+        }
 
         return response()->json(['message' => 'Part details updated successfully']);
     }
+
 
     protected function getCurrentStock($partId)
     {

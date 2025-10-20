@@ -191,6 +191,9 @@
             </div>     
 
             <div class="modal-footer">
+                @php
+                    // dd(auth()->user()->role);
+                @endphp
                 @if(auth()->user()->role === 'admin' || auth()->user()->role === 'pic' || auth()->user()->role === 'hod' || auth()->user()->role === 'purchasing')
                     <button type="button" class="btn btn-success" id="approveButton">Approve</button>
                     <button type="button" class="btn btn-danger" id="rejectButton">Reject</button>

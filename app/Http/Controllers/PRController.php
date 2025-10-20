@@ -322,9 +322,11 @@ class PRController extends Controller
             $dataT = prTicket::whereIn('status', ['Pending', 'Revised', 'HOD_Approved'])->get();
         } elseif ($user->role === 'hod') {
             // HOD can see pending tickets from their department
-            $dept = deptList::where('user_hod_id', $user->id)->first();
+            $dept = deptList::where('user_hod_id', $user->dept_id)->first();
+            // dd($dept->id);
             if ($dept) {
                 $deptUserIds = User::where('dept_id', $dept->id)->pluck('id');
+                // dd($deptUserIds);
                 $dataT = prTicket::whereIn('user_id', $deptUserIds)
                                  ->whereIn('status', ['Pending', 'Revised', 'HOD_Approved'])
                                  ->get();
@@ -338,7 +340,7 @@ class PRController extends Controller
                              ->get();
         }
 
-        // return $dataT;
+        // return $dataT; 
 
         return view('pr.pending_pr', [
             'dataT' => $dataT
@@ -353,12 +355,14 @@ class PRController extends Controller
             // Admin and Purchasing can see all approved tickets
             $dataT = prTicket::where('status', 'Approved')->get();
         } elseif ($user->role === 'hod') {
-            // HOD can see approved tickets from their department
-            $dept = deptList::where('user_hod_id', $user->id)->first();
+            // HOD can see pending tickets from their department
+            $dept = deptList::where('user_hod_id', $user->dept_id)->first();
+            // dd($dept->id);
             if ($dept) {
                 $deptUserIds = User::where('dept_id', $dept->id)->pluck('id');
+                // dd($deptUserIds);
                 $dataT = prTicket::whereIn('user_id', $deptUserIds)
-                                 ->where('status', 'Approved')
+                                 ->whereIn('status', ['Approved'])
                                  ->get();
             } else {
                 $dataT = collect(); // Empty collection if no department
@@ -384,7 +388,7 @@ class PRController extends Controller
             $dataT = prTicket::where('status', 'Rejected')->get();
         } elseif ($user->role === 'hod') {
             // HOD can see rejected tickets from their department
-            $dept = deptList::where('user_hod_id', $user->id)->first();
+            $dept = deptList::where('user_hod_id', $user->dept_id)->first();
             if ($dept) {
                 $deptUserIds = User::where('dept_id', $dept->id)->pluck('id');
                 $dataT = prTicket::whereIn('user_id', $deptUserIds)
