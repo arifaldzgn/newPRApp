@@ -111,6 +111,18 @@
         #ticketModal .collapse.show {
             display: block;
         }
+                            /* Make readonly fields visually distinct but consistent */
+                            input[readonly] {
+                                background-color: #f8f9fa !important; /* light gray background */
+                                color: #6c757d !important; /* muted text color */
+                                cursor: not-allowed;
+                                border-color: #dee2e6;
+                            }
+
+                            input[readonly]:focus {
+                                box-shadow: none;
+                                border-color: #dee2e6;
+                            }
     </style>
 
     @stack('styles')
@@ -467,11 +479,21 @@
                 success: function(response) {
                     console.log('User details response:', response);
                     if (response.user) {
-                        $('#userId').val(response.user.id);
-                        $('#name').val(response.user.name || 'N/A');
-                        $('#email').val(response.user.email || 'N/A');
-                        $('#badge_no').val(response.user.badge_no || 'N/A');
-                        $('#role').val(response.user.role || 'N/A');
+                        const user = response.user;
+
+                        $('#userId').val(user.id);
+                        $('#name').val(user.name || 'N/A');
+                        $('#email').val(user.email || 'N/A');
+                        $('#badge_no').val(user.badge_no || 'N/A');
+                        $('#role').val(user.role || 'N/A');
+
+                        // ✅ Populate Dept info
+                        if (user.dept_list && user.dept_list.dept_name) {
+                            $('#dept').val(user.dept_list.dept_name + ' (' + (user.dept_list.dept_code || '-') + ')');
+                        } else {
+                            $('#dept').val('N/A');
+                        }
+
                     } else {
                         console.error('No user data in response:', response);
                         $('#account-settings-content').html('<div class="alert alert-danger">Failed to load user details.</div>');

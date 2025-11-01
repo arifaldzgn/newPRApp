@@ -164,16 +164,22 @@
                                                 <input type="email" class="form-control" id="email" name="email" readonly>
                                             </div>
                                         </div>
-                                        <div class="col-md-6">
+                                        <div class="col-md-4">
                                             <div class="mb-3">
                                                 <label for="badge_no" class="form-label">Badge No.</label>
                                                 <input type="text" class="form-control" id="badge_no" name="badge_no" readonly>
                                             </div>
                                         </div>
-                                        <div class="col-md-6">
+                                        <div class="col-md-4">
                                             <div class="mb-3">
                                                 <label for="role" class="form-label">Role</label>
                                                 <input type="text" class="form-control" id="role" name="role" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label for="dept" class="form-label">Dept</label>
+                                                <input type="text" class="form-control" id="dept" name="dept" readonly>
                                             </div>
                                         </div>
                                     </div>
