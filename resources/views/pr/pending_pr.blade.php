@@ -732,7 +732,7 @@
                         const ticketStatus = response.ticket.status;
 
                         let approveUrl;
-                        if ((userRole === 'hod' || userRole === 'admin' || userRole === 'pic') && 
+                        if ((userRole === 'hod' || userRole === 'admin' || userRole === 'pic' || userRole === 'purchasing') && 
                             (ticketStatus === 'Pending' || ticketStatus === 'Revised')) {
                             approveUrl = '/ticket/' + requestId + '/approve';
                         } else if ((userRole === 'purchasing' || userRole === 'admin') && 

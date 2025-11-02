@@ -31,6 +31,9 @@ class partList extends Model
         parent::boot();
 
         self::created(function($part) {
+
+            $userId = auth()->user() ? auth()->user()->id : 1;
+
             PartListLogHistories::create([
                 'part_list_id' => $part->id,
                 'asset_code_id' => $part->asset_code_id,
@@ -39,13 +42,15 @@ class partList extends Model
                 'UoM' => $part->UoM,
                 'type' => $part->type,
                 'action' => 'create',
-                'user_id' => auth()->user()->id,
+                'user_id' => $userId,
             ]);
         });
 
         self::updated(function($part) {
             $changes = $part->getChanges();
             $oldData = array_intersect_key($part->getOriginal(), $changes);
+
+            $userId = auth()->user() ? auth()->user()->id : 1;
 
             PartListLogHistories::create([
                 'part_list_id' => $part->id,
@@ -55,7 +60,7 @@ class partList extends Model
                 'UoM' => $part->UoM,
                 'type' => $part->type,
                 'action' => 'update',
-                'user_id' => auth()->user()->id,
+                'user_id' => $userId,
                 'old_data' => json_encode($oldData),
                 'new_data' => json_encode($changes),
             ]);

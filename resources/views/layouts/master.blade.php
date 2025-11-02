@@ -601,6 +601,53 @@
                 });
             });
         });
+
+        document.getElementById('mark-all-read').addEventListener('click', function(e) {
+            e.preventDefault();
+
+            fetch('{{ route('notifications.all') }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // ✅ Update UI
+                    document.getElementById('notification-count').textContent = '0';
+                    document.querySelectorAll('#notification-content .notification-item').forEach(el => {
+                        el.classList.remove('unread');
+                    });
+
+                    // 🎉 SweetAlert success message
+                    Swal.fire({
+                        title: 'Marked as Read!',
+                        text: 'All your notifications have been marked as read.',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                } else {
+                    // ⚠️ In case something went wrong
+                    Swal.fire({
+                        title: 'Oops!',
+                        text: 'Something went wrong. Please try again.',
+                        icon: 'error',
+                    });
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                Swal.fire({
+                    title: 'Error!',
+                    text: 'Unable to connect to the server.',
+                    icon: 'error',
+                });
+            });
+        });
         </script>
 
     @yield('page-vendors-scripts')

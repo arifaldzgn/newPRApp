@@ -9,6 +9,7 @@ use App\Http\Controllers\BookingRoomController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\File;
+use App\Http\Controllers\TicketDownloadController;
 
 
 // ------------------------- Public Routes -------------------------
@@ -109,7 +110,8 @@ Route::group(['middleware' => 'auth'], function () {
     // ========================== NOTIFICATION ==============================
     Route::get('/notifications/fetch', [NotificationController::class, 'fetch'])->name('notifications.fetch');
     Route::post('/notifications/read', [NotificationController::class, 'read'])->name('notifications.read');
-    Route::get('/notifications', [NotificationController::class, 'all'])->name('notifications.all');
+    // Route::get('/notifications', [NotificationController::class, 'all'])->name('notifications.all');
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'all'])->name('notifications.all');
 
     // Test email route
     Route::get('/test-mail', function () {
@@ -122,6 +124,10 @@ Route::group(['middleware' => 'auth'], function () {
     });
     // ======================== END OF NOTIFICATION =========================
 });
+
+// Ticket Downloader
+Route::get('/downloadApprovedTicket', [TicketDownloadController::class, 'listApprovedTickets']);
+
 
 
 Route::get('/models-first', function () {

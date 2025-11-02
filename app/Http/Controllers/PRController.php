@@ -543,103 +543,150 @@ class PRController extends Controller
         $part->delete();
     }
 
-    public function approveTicket($requestId)
+    public function approveTicket(Request $request, $id)
     {
-        $request = prTicket::findOrFail($requestId);
+        try {
+            $ticket = prTicket::findOrFail($id);
+            $currentUser = auth()->user();
 
-        // Allow hod, admin, or pic to approve if status is Pending or Revised
-        if (!in_array(auth()->user()->role, ['hod', 'admin', 'pic', 'purchasing'])) {
-            return response()->json(['error' => 'Unauthorized to approve this ticket'], 403);
-        }
+            // Authorization: hanya HOD, admin, PIC atau purchasing yang boleh approve
+            if (!in_array($currentUser->role, ['hod', 'admin', 'pic', 'purchasing'])) {
+                return response()->json(['error' => 'Unauthorized to approve this ticket'], 403);
+            }
 
-        // Ensure ticket is in Pending or Revised status
-        if (!in_array($request->status, ['Pending', 'Revised'])) {
-            return response()->json(['error' => 'Ticket must be in Pending or Revised status to be approved by HOD'], 400);
-        }
+            // Status harus Pending atau Revised
+            if (!in_array($ticket->status, ['Pending', 'Revised'])) {
+                return response()->json(['error' => 'Ticket must be Pending or Revised to approve'], 400);
+            }
 
-        if ($request->status === 'HOD_Approved') {
-            return response()->json(['error' => 'Ticket already approved by HOD'], 400);
-        }
+            // Update ticket status
+            $ticket->status = 'HOD_Approved';
+            $ticket->date_approval = date('Y-m-d');
+            $ticket->approved_user_id = $currentUser->id;
+            $ticket->save();
+            $ticket->refresh(); // pastikan ID dan relasi valid
 
-        $request->status = 'HOD_Approved';
-        $request->date_approval = date('Y-m-d');
-        $request->approved_user_id = auth()->user()->id;
-        $request->save();
+            // Refresh stock untuk semua part terkait
+            $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
+            foreach ($allParts as $partId) {
+                $this->getCurrentStock($partId);
+            }
 
-        $data = ['ticket' => $request->ticketCode, 'status' => $request->status];
+            // Kirim email ke PIC/purchasing jika ada
+            $picId = $ticket->purchasing_approved_user_id;
+            if ($picId) {
+                $picEmail = User::find($picId)->email ?? null;
+                if ($picEmail) {
+                    Mail::to($picEmail)->send(new TestEmail([
+                        'ticket' => $ticket->ticketCode,
+                        'status' => $ticket->status
+                    ]));
+                }
+            }
 
-        $picId = $request->purchasing_approved_user_id;
-        $picEmail = User::find($picId)->email ?? 'ariffalkzn@gmail.com';
-        Mail::to($picEmail)->send(new TestEmail($data));
-
-        // Notify user
-        $userNotification = Notification::create([
-            'user_id' => $request->user_id,
-            'pr_ticket_id' => $request->id,
-            'status' => $request->status,
-            'message' => "Your PR request {$request->ticketCode} has been approved by HOD and is now pending purchasing approval."
-        ]);
-        $this->sendSkypeNotification($request->user_id, $userNotification->message);
-
-        // Notify purchasing
-        if ($picId) {
-            $picNotification = Notification::create([
-                'user_id' => $picId,
-                'pr_ticket_id' => $request->id,
-                'status' => $request->status,
-                'message' => "PR request {$request->ticketCode} from " . $request->user->name . " has been approved by HOD and is pending your approval."
+            // Notifikasi ke user yang buat PR
+            Notification::create([
+                'user_id' => $ticket->user_id,
+                'pr_ticket_id' => $ticket->id,
+                'status' => $ticket->status,
+                'message' => "Your PR request {$ticket->ticketCode} has been approved by HOD and is now pending purchasing approval."
             ]);
-            $this->sendSkypeNotification($picId, $picNotification->message);
-        }
 
-        $allParts = $request->prRequest()->pluck('partlist_id')->unique();
-        foreach ($allParts as $partId) {
-            app(\App\Http\Controllers\PartListController::class)->getCurrentStock($partId);
-        }
+            // Notifikasi ke PIC/purchasing jika ada
+            if ($picId) {
+                Notification::create([
+                    'user_id' => $picId,
+                    'pr_ticket_id' => $ticket->id,
+                    'status' => $ticket->status,
+                    'message' => "PR request {$ticket->ticketCode} from {$ticket->user->name} has been approved by HOD and is pending your approval."
+                ]);
+            }
 
-        return response()->json(['message' => 'The ticket has been successfully approved by HOD']);
+            // Email ke HOD (optional, bisa dikirim ke atasan)
+            $userHodId = $ticket->user->deptList->user_hod_id ?? null;
+            if ($userHodId) {
+                $userDeptHodEmail = User::find($userHodId)->email ?? null;
+                if ($userDeptHodEmail) {
+                    Mail::to($userDeptHodEmail)->send(new TestEmail([
+                        'ticket' => $ticket->ticketCode,
+                        'status' => $ticket->status
+                    ]));
+                }
+            }
+
+            return response()->json(['message' => 'Ticket successfully approved by HOD']);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     public function purchasingApprove($requestId)
     {
-        $request = prTicket::findOrFail($requestId);
+        try {
+            $ticket = prTicket::with('user')->findOrFail($requestId);
+            $ticket = $ticket->fresh();
 
-        // Allow purchasing, pic, or admin to approve any ticket in HOD_Approved 
-        // dd(auth()->user()->role);
-        if (!in_array(auth()->user()->role, ['purchasing', 'pic', 'admin'])) {
-            return response()->json(['error' => 'Unauthorized to approve this ticket'], 403);
+            $currentUser = auth()->user();
+
+            if (!in_array($currentUser->role, ['purchasing', 'pic', 'admin'])) {
+                return response()->json(['error' => 'Unauthorized to approve this ticket'], 403);
+            }
+
+            if ($ticket->status !== 'HOD_Approved') {
+                return response()->json(['error' => 'Ticket must be HOD_Approved to be approved by purchasing'], 400);
+            }
+
+            $ticket->status = 'Approved';
+            $ticket->date_purchasing_approval = date('Y-m-d');
+            $ticket->purchasing_approved_user_id = $currentUser->id;
+            $ticket->save();
+
+            $ticketId = $ticket->id;
+            $userId = $ticket->user_id;
+            $ticketCode = $ticket->ticketCode;
+
+            // Email
+            $userEmail = optional($ticket->user)->email ?? 'ariffalkzn@gmail.com';
+            Mail::to($userEmail)->send(new TestEmail([
+                'ticket' => $ticketCode,
+                'status' => $ticket->status
+            ]));
+
+            // Notifications (only if user_id and ticket_id exist)
+            if ($ticketId && $userId) {
+                Notification::create([
+                    'user_id' => $userId,
+                    'pr_ticket_id' => $ticketId,
+                    'status' => $ticket->status,
+                    'message' => "Your PR request {$ticketCode} has been fully approved by purchasing."
+                ]);
+            }
+
+            // Optional notification to approver (current user)
+            if ($ticketId && $currentUser->id) {
+                Notification::create([
+                    'user_id' => $currentUser->id,
+                    'pr_ticket_id' => $ticketId,
+                    'status' => $ticket->status,
+                    'message' => "You have approved PR request {$ticketCode} from " . optional($ticket->user)->name
+                ]);
+            }
+
+            // Refresh stock
+            $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
+            foreach ($allParts as $partId) {
+                $this->getCurrentStock($partId);
+            }
+
+            return response()->json(['message' => 'The ticket has been successfully approved by purchasing']);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
-
-        // Ensure ticket is in HOD_Approved status
-        if ($request->status !== 'HOD_Approved') {
-            return response()->json(['error' => 'Ticket must be HOD_Approved to be approved by purchasing'], 400);
-        }
-
-        if ($request->status === 'Approved') {
-            return response()->json(['error' => 'Ticket already approved by purchasing'], 400);
-        }
-
-        $request->status = 'Approved';
-        $request->date_purchasing_approval = date('Y-m-d');
-        $request->purchasing_approved_user_id = auth()->user()->id;
-        $request->save();
-
-        $data = ['ticket' => $request->ticketCode, 'status' => $request->status];
-
-        $userEmail = $request->user->email ?? 'ariffalkzn@gmail.com';
-        Mail::to($userEmail)->send(new TestEmail($data));
-
-        // Notify user
-        $userNotification = Notification::create([
-            'user_id' => $request->user_id,
-            'pr_ticket_id' => $request->id,
-            'status' => $request->status,
-            'message' => "Your PR request {$request->ticketCode} has been fully approved by purchasing."
-        ]);
-        $this->sendSkypeNotification($request->user_id, $userNotification->message);
-
-        return response()->json(['message' => 'The ticket has been successfully approved by purchasing']);
     }
+
+
 
     public function test()
     {
@@ -694,26 +741,6 @@ class PRController extends Controller
             $ticket->reason_reject = "{$reasonInput} — Rejected by {$rejectorName}";
             $ticket->save();
             $ticket->refresh(); // Pastikan ticket terbaru dan ID valid
-
-            // Refund stock quantities
-            // foreach ($ticket->prRequest as $req) {
-            //     $part = PartList::find($req->partlist_id);
-            //     if ($part && $part->requires_stock_reduction !== "false") {
-            //         // Tambah kembali qty ke PartList
-            //         $part->requires_stock_reduction = (int)$part->requires_stock_reduction + $req->qty;
-            //         $part->save();
-
-            //         // Simpan ke PartStock
-            //         PartStock::create([
-            //             'part_list_id' => $req->partlist_id,
-            //             'quantity'     => $req->qty,
-            //             'operations'   => 'plus',
-            //             'source'       => 'PR Request Rejected',
-            //             'source_type'  => 'pr_request_reject',
-            //             'source_ref'   => $ticket->ticketCode,
-            //         ]);
-            //     }
-            // }
 
             // Refresh current_stock untuk semua part terkait
             $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
@@ -975,6 +1002,7 @@ class PRController extends Controller
             $submittedIds = [];
             $processedIds = [];
 
+            // Ambil semua PR request dari input
             foreach ($request->pr_request ?? [] as $pRQ) {
                 if (isset($pRQ['id']) && !in_array($pRQ['id'], $submittedIds)) {
                     $submittedIds[] = $pRQ['id'];
@@ -988,16 +1016,18 @@ class PRController extends Controller
                 return response()->json(['error' => 'Ticket ID not found'], 400);
             }
 
-            $ticket = prTicket::findOrFail($ticketId);
+            // Ambil ticket + relasi user & deptList (HOD)
+            $ticket = prTicket::with('user.deptList')->findOrFail($ticketId);
             $user = auth()->user();
             $isOwner = $ticket->user_id === $user->id;
             $dept = deptList::where('user_hod_id', $user->id)->first();
             $isHod = ($user->role === 'hod') && $dept && User::where('id', $ticket->user_id)->where('dept_id', $dept->id)->exists();
+
             if ($user->role !== 'admin' && !$isOwner && !$isHod) {
                 return response()->json(['error' => 'Unauthorized to update this ticket'], 403);
             }
 
-            // Delete removed PR requests and restore stock
+            // DELETE PR requests yang sudah dihapus & restore stock
             $existingPrRequests = prRequest::where('ticket_id', $ticketId)->get();
             $idsToDelete = array_diff($existingPrRequests->pluck('id')->toArray(), $submittedIds);
 
@@ -1006,6 +1036,7 @@ class PRController extends Controller
                 if ($prToDelete) {
                     $part = PartList::find($prToDelete->partlist_id);
                     if ($part && $part->requires_stock_reduction !== "false") {
+                        // Restore stock
                         PartStock::create([
                             'part_list_id' => $part->id,
                             'quantity' => $prToDelete->qty,
@@ -1019,7 +1050,7 @@ class PRController extends Controller
                 }
             }
 
-            // Update submitted PR requests
+            // Update PR requests yang ada
             foreach ($request->pr_request ?? [] as $pRQ) {
                 if (in_array($pRQ['id'], $processedIds)) continue;
 
@@ -1054,13 +1085,16 @@ class PRController extends Controller
                 $processedIds[] = $pRQ['id'];
             }
 
-            // Update ticket status once
+            // Update ticket status
             $ticket->status = 'Revised';
             $ticket->advance_cash = $request->input('advance_cash');
             $ticket->save();
 
-            // Send email
+            // Reload relasi user & deptList agar HOD valid
+            $ticket->load('user.deptList');
             $userHodId = $ticket->user->deptList->user_hod_id ?? null;
+
+            // Kirim email & notifikasi
             if ($userHodId) {
                 $userDeptHodEmail = User::find($userHodId)->email;
                 Mail::to($userDeptHodEmail)->send(new TestEmail([
@@ -1069,7 +1103,7 @@ class PRController extends Controller
                 ]));
             }
 
-            // Notifications
+            // Notifikasi ke user
             Notification::create([
                 'user_id' => $ticket->user_id,
                 'pr_ticket_id' => $ticket->id,
@@ -1077,6 +1111,7 @@ class PRController extends Controller
                 'message' => "Your PR request {$ticket->ticketCode} has been Revised. Please review the changes."
             ]);
 
+            // Notifikasi ke HOD
             if ($userHodId) {
                 Notification::create([
                     'user_id' => $userHodId,
@@ -1086,12 +1121,11 @@ class PRController extends Controller
                 ]);
             }
 
-            // Refresh stock
+            // Refresh stock untuk semua part terkait
             $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
             foreach ($allParts as $partId) {
                 $this->getCurrentStock($partId);
             }
-
 
             return response()->json(['message' => 'Request successfully saved']);
 

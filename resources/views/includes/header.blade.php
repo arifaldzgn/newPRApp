@@ -78,7 +78,7 @@
                                 <h6 class="m-0" key="t-notifications">Notifications</h6>
                             </div>
                             <div class="col-auto">
-                                <a href="{{ route('notifications.all') }}" class="small" key="t-view-all">View All</a>
+                                <a href="#" id="mark-all-read" class="small" key="t-view-all">Mark as Read</a>
                             </div>
                         </div>
                     </div>
@@ -86,9 +86,9 @@
                         <!-- Notifications will be loaded here -->
                     </div>
                     <div class="p-2 border-top d-grid">
-                        <a class="btn btn-sm btn-link font-size-14 text-center" href="{{ route('notifications.all') }}">
+                        {{-- <a class="btn btn-sm btn-link font-size-14 text-center" href="{{ route('notifications.all') }}">
                             <i class="mdi mdi-arrow-right-circle me-1"></i> <span key="t-view-more">View More..</span>
-                        </a>
+                        </a> --}}
                     </div>
                 </div>
             </div>

@@ -54,11 +54,11 @@ class NotificationController extends Controller
     public function all()
     {
         $userId = auth()->id();
-        $notifications = Notification::where('user_id', $userId)
-            ->with('prTicket')
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
 
-        return view('notifications.all', compact('notifications'));
+        Notification::where('user_id', $userId)
+            ->where('is_read', 0)
+            ->update(['is_read' => 1]);
+
+        return response()->json(['success' => true]);
     }
 }

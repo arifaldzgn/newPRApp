@@ -27,7 +27,7 @@
                     <ul class="sub-menu" aria-expanded="false" style="">
                         <li><a href="{{ route('account') }}" key="t-users">Users</a></li>
                         <li><a href="{{ route('departments') }}" key="t-dept">Departments</a></li>
-                        <li><a href="{{ route('role') }}" key="t-role">Roles</a></li>
+                        {{-- <li><a href="{{ route('role') }}" key="t-role">Roles</a></li> --}}
 
                     </ul>
                 </li>
@@ -91,7 +91,7 @@
                 <li>
                     <a href="{{ route('user_log') }}" class="waves-effect">
                         <i class="bx bx-file"></i>
-                        <span key="t-file-manager">Log History</span>
+                        <span key="t-file-manager">PR Log History</span>
                     </a>
                 </li>
                 {{-- <li>

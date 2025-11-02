@@ -62,6 +62,7 @@ class PartListSeeder extends Seeder
         ];
 
         foreach ($parts as $part) {
+            // $part['user_id'] = 3;  
             PartList::create($part);
         }
     }
