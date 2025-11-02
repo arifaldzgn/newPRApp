@@ -17,6 +17,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Skype; // From SkypePHP library
 
 class PRController extends Controller
 {
@@ -50,29 +51,40 @@ class PRController extends Controller
         ]);
     }
 
-    public function generateUniqueTicketCode()
+   public function generateUniqueTicketCode()
     {
-        $currentYear = date('y');
-        $currentMonth = date('m');
-        $prefix = $currentYear . ' ' . $currentMonth . ' ';
+        $currentYear = date('y'); // e.g., "25"
+        $currentMonth = date('m'); // e.g., "11"
+        $prefix = $currentYear . $currentMonth; // "2511"
 
-        return DB::transaction(function () use ($prefix) {
-            $lastTicket = prTicket::where('ticketCode', 'like', $prefix . '%')
+        // Gunakan transaksi untuk lock sequence
+        return DB::transaction(function () use ($prefix, $currentYear, $currentMonth) {
+            // Ambil kode terakhir bulan ini
+            $lastTicket = prTicket::whereRaw("REPLACE(ticketCode, ' ', '') LIKE ?", [$prefix . '%'])
                 ->lockForUpdate()
                 ->orderBy('ticketCode', 'desc')
                 ->first();
 
-            $ticketCount = $lastTicket ? (int) substr($lastTicket->ticketCode, -3) : 0;
-            $ticketCount++;
-            Log::info('Generating ticket code', ['prefix' => $prefix, 'ticketCount' => $ticketCount]);
+            // Ambil nomor terakhir, default 0
+            $lastNumber = 0;
+            if ($lastTicket) {
+                $clean = preg_replace('/\s+/', '', $lastTicket->ticketCode); // hapus spasi
+                $lastNumber = (int) substr($clean, -3); // ambil 3 digit terakhir
+            }
 
-            do {
-                $ticketNumber = str_pad($ticketCount, 3, '0', STR_PAD_LEFT);
-                $ticketCode = $prefix . $ticketNumber;
-                Log::info('Trying ticketCode', ['ticketCode' => $ticketCode]);
-                $ticketCount++;
-            } while (prTicket::where('ticketCode', $ticketCode)->exists());
+            $nextNumber = $lastNumber + 1;
+            $ticketNumber = str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
 
+            // Format final ticket code, misal "25 11 001"
+            $ticketCode = "{$currentYear} {$currentMonth} {$ticketNumber}";
+
+            // Pastikan belum ada (meskipun kecil kemungkinannya)
+            if (prTicket::where('ticketCode', $ticketCode)->exists()) {
+                // Tambah randomizer fallback
+                $ticketCode = "{$currentYear} {$currentMonth} " . str_pad(rand(1, 999), 3, '0', STR_PAD_LEFT);
+            }
+
+            \Log::info("Generated Ticket Code: {$ticketCode}");
             return $ticketCode;
         });
     }
@@ -80,12 +92,9 @@ class PRController extends Controller
     public function create(Request $request)
     {
         try {
-            //Checking roles for creation - only admins, HODs, or clerks can create
             if (!in_array(auth()->user()->role, ['admin', 'hod', 'clerk','regular', 'purchasing', 'pic'])) {
                 return response()->json(['error' => 'Unauthorized to create ticket'], 403);
             }
-
-            Log::info('Starting PR creation', ['request' => $request->all()]);
 
             $validatedData = $request->validate([
                 'pr_request.*.part_name' => 'required|string|min:1',
@@ -100,14 +109,16 @@ class PRController extends Controller
                 'advance_cash' => 'nullable|numeric|min:0',
             ]);
 
-            $userId = auth()->user()->id;
-            $hodId = User::find($userId)->deptList->user_hod_id ?? $userId;
+            $user = auth()->user();
+            $userId = $user->id;
+            $hodId = optional($user->deptList)->user_hod_id ?? $userId;
+            if (!User::find($hodId)) $hodId = $userId;
             $picUser = User::where('role', 'pic')->first();
-            $picId = $picUser ? $picUser->id : $hodId; // Fallback to HOD if no PIC found
-            Log::info('User info', ['userId' => $userId, 'hodId' => $hodId, 'picId' => $picId]);
+            $picId = $picUser ? $picUser->id : $hodId;
 
             $ticketCode = $this->generateUniqueTicketCode();
 
+            // 🔒 DB transaction hanya untuk core data
             $newTicket = DB::transaction(function () use ($ticketCode, $userId, $hodId, $picId, $validatedData, $request) {
                 $newTicket = prTicket::create([
                     'ticketCode' => $ticketCode,
@@ -115,34 +126,21 @@ class PRController extends Controller
                     'user_id' => $userId,
                     'approved_user_id' => $hodId,
                     'purchasing_approved_user_id' => $picId,
-                    'date_approval' => date('Y-m-d'),
+                    'date_approval' => now()->format('Y-m-d'),
                     'advance_cash' => $request->advance_cash ?? 0,
                 ]);
-                Log::info('Created ticket', ['ticketCode' => $ticketCode, 'ticketId' => $newTicket->id]);
 
-                foreach ($validatedData['pr_request'] as $index => $prQ) {
+                foreach ($validatedData['pr_request'] as $prQ) {
                     $part = partList::findOrFail($prQ['partlist_id']);
                     $qty = (int) $prQ['qty'];
-
-                    // Validate stock
                     $currentStock = $this->getCurrentStock($part->id);
-                    Log::info('Checking stock', ['part_id' => $part->id, 'currentStock' => $currentStock, 'requestedQty' => $qty]);
 
                     if ($currentStock !== 'false' && is_numeric($currentStock)) {
                         $newStock = (int) $currentStock - $qty;
-                        if ($newStock < 0) {
-                            throw new Exception("Insufficient stock for part: {$part->part_name} (ID: {$part->id}). Requested: {$qty}, Available: {$currentStock}");
-                        }
+                        if ($newStock < 0) throw new Exception("Insufficient stock for part: {$part->part_name}");
                         $part->requires_stock_reduction = $newStock;
                         $part->save();
-                        Log::info('Updated stock', ['part_id' => $part->id, 'newStock' => $newStock]);
-                    }
 
-                    $prQ['ticket_id'] = $newTicket->id;
-                    prRequest::create($prQ);
-                    Log::info('Created PR request', ['partlist_id' => $prQ['partlist_id'], 'ticket_id' => $newTicket->id]);
-
-                    if ($currentStock !== 'false' && is_numeric($currentStock)) {
                         PartStock::create([
                             'part_list_id' => $prQ['partlist_id'],
                             'quantity' => $qty,
@@ -151,14 +149,22 @@ class PRController extends Controller
                             'source_type' => 'pr_request',
                             'source_ref' => $newTicket->ticketCode,
                         ]);
-                        Log::info('Created PartStock entry', ['part_list_id' => $prQ['partlist_id'], 'quantity' => $qty]);
                     }
+
+                    $prQ['ticket_id'] = $newTicket->id;
+                    prRequest::create($prQ);
                 }
 
-                $data = ['ticket' => $newTicket->ticketCode, 'status' => $newTicket->status];
+                return $newTicket;
+            });
+
+            // 📨 Email + Notification di luar transaction (tidak bisa rollback DB)
+            try {
                 $hodEmail = User::find($hodId)->email ?? 'ariffalkzn@gmail.com';
-                Mail::to($hodEmail)->queue(new TestEmail($data));
-                Log::info('Queued email', ['hodEmail' => $hodEmail]);
+                Mail::to($hodEmail)->queue(new TestEmail([
+                    'ticket' => $newTicket->ticketCode,
+                    'status' => $newTicket->status
+                ]));
 
                 Notification::create([
                     'user_id' => $userId,
@@ -166,41 +172,36 @@ class PRController extends Controller
                     'status' => $newTicket->status,
                     'message' => "Your PR request {$newTicket->ticketCode} has been submitted and is {$newTicket->status}.",
                 ]);
+
                 Notification::create([
                     'user_id' => $hodId,
                     'pr_ticket_id' => $newTicket->id,
                     'status' => $newTicket->status,
-                    'message' => "A new PR request {$newTicket->ticketCode} from " . auth()->user()->name . " is {$newTicket->status} for your approval.",
+                    'message' => "A new PR request {$newTicket->ticketCode} from {$user->name} is {$newTicket->status} for your approval.",
                 ]);
-                Log::info('Created notifications', ['ticket_id' => $newTicket->id]);
 
                 $newTicket->logHistory('created', null, $newTicket->toArray(), null);
-                Log::info('Logged ticket history', ['ticket_id' => $newTicket->id]);
-
-                return $newTicket;
-            });
+            } catch (Exception $notifyEx) {
+                Log::warning('Non-critical: notification failed', ['error' => $notifyEx->getMessage()]);
+            }
 
             return response()->json(['message' => 'New Request Successfully added']);
+        }
 
-        } catch (QueryException $e) {
-            Log::error('Database error in PR creation', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all(),
-            ]);
+        catch (QueryException $e) {
+            Log::error('DB ERROR in PR creation', ['msg' => $e->getMessage()]);
             if ($e->getCode() === '23000') {
-                return response()->json(['error' => 'Failed to generate a unique ticket code. Please try again.'], 409);
+                return response()->json(['error' => 'Duplicate ticket code — please try again.'], 409);
             }
-            return response()->json(['error' => 'Database error occurred. Please try again.'], 500);
-        } catch (Exception $e) {
-            Log::error('Error in PR creation', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all(),
-            ]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+
+        catch (Exception $e) {
+            Log::error('ERROR in PR creation', ['msg' => $e->getMessage()]);
             return response()->json(['error' => $e->getMessage()], 422);
         }
     }
+
 
     public function retrievePartDetails(Request $request)
     {
@@ -428,30 +429,33 @@ class PRController extends Controller
             $ticket = prTicket::with('prRequest')->findOrFail($id);
 
             // MOVED: Create notifications BEFORE delete (avoids FK constraint on commit)
-            Notification::create([
+            $userNotification = Notification::create([
                 'user_id' => $ticket->user_id,
                 'pr_ticket_id' => $ticket->id,
                 'status' => 'Deleted',
                 'message' => "Your PR request {$ticket->ticketCode} has been deleted."
             ]);
+            $this->sendSkypeNotification($ticket->user_id, $userNotification->message);
 
             $hodId = $ticket->user->deptList->user_hod_id ?? null;
             if ($hodId) {
-                Notification::create([
+                $hodNotification = Notification::create([
                     'user_id' => $hodId,
                     'pr_ticket_id' => $ticket->id,
                     'status' => 'Deleted',
                     'message' => "PR request {$ticket->ticketCode} from {$ticket->user->name} has been deleted."
                 ]);
+                $this->sendSkypeNotification($hodId, $hodNotification->message);
             }
 
             if ($ticket->purchasing_approved_user_id) {
-                Notification::create([
+                $picNotification = Notification::create([
                     'user_id' => $ticket->purchasing_approved_user_id,
                     'pr_ticket_id' => $ticket->id,
                     'status' => 'Deleted',
                     'message' => "PR request {$ticket->ticketCode} has been deleted."
                 ]);
+                $this->sendSkypeNotification($ticket->purchasing_approved_user_id, $picNotification->message);
             }
 
             $totalQuantities = $ticket->prRequest->groupBy('partlist_id')->map(function ($requests) {
@@ -562,24 +566,26 @@ class PRController extends Controller
         Mail::to($picEmail)->send(new TestEmail($data));
 
         // Notify user
-        Notification::create([
+        $userNotification = Notification::create([
             'user_id' => $request->user_id,
             'pr_ticket_id' => $request->id,
             'status' => $request->status,
             'message' => "Your PR request {$request->ticketCode} has been approved by HOD and is now pending purchasing approval."
         ]);
+        $this->sendSkypeNotification($request->user_id, $userNotification->message);
 
         // Notify purchasing
         if ($picId) {
-            Notification::create([
+            $picNotification = Notification::create([
                 'user_id' => $picId,
                 'pr_ticket_id' => $request->id,
                 'status' => $request->status,
                 'message' => "PR request {$request->ticketCode} from " . $request->user->name . " has been approved by HOD and is pending your approval."
             ]);
+            $this->sendSkypeNotification($picId, $picNotification->message);
         }
 
-        $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
+        $allParts = $request->prRequest()->pluck('partlist_id')->unique();
         foreach ($allParts as $partId) {
             app(\App\Http\Controllers\PartListController::class)->getCurrentStock($partId);
         }
@@ -613,12 +619,13 @@ class PRController extends Controller
         Mail::to($userEmail)->send(new TestEmail($data));
 
         // Notify user
-        Notification::create([
+        $userNotification = Notification::create([
             'user_id' => $request->user_id,
             'pr_ticket_id' => $request->id,
             'status' => $request->status,
             'message' => "Your PR request {$request->ticketCode} has been fully approved by purchasing."
         ]);
+        $this->sendSkypeNotification($request->user_id, $userNotification->message);
 
         return response()->json(['message' => 'The ticket has been successfully approved by purchasing']);
     }
@@ -686,12 +693,13 @@ class PRController extends Controller
 
             Mail::to($userDeptHodEmail)->send(new TestEmail($data));
 
-            Notification::create([
+            $userNotification = Notification::create([
                 'user_id' => $ticket->user_id,
                 'pr_ticket_id' => $ticket->id,
                 'status' => $ticket->status,
                 'message' => "Your PR request {$ticket->ticketCode} has been rejected by {$rejectorName}. Reason: {$reasonInput}"
             ]);
+            $this->sendSkypeNotification($ticket->user_id, $userNotification->message);
         }
 
         $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
@@ -893,21 +901,23 @@ class PRController extends Controller
             Mail::to($userDeptHodEmail)->send(new TestEmail($data));
 
             // Notify user
-            Notification::create([
+            $userNotification = Notification::create([
                 'user_id' => $revised->user_id,
                 'pr_ticket_id' => $revised->id,
                 'status' => $revised->status,
                 'message' => "Your PR request {$revised->ticketCode} has been Revised. Please review the changes."
             ]);
+            $this->sendSkypeNotification($revised->user_id, $userNotification->message);
 
             // Notify HOD
             if ($userHodId) {
-                Notification::create([
+                $hodNotification = Notification::create([
                     'user_id' => $userHodId,
                     'pr_ticket_id' => $revised->id,
                     'status' => $revised->status,
                     'message' => "PR request {$revised->ticketCode} from {$revised->user->name} has been Revised and needs your review."
                 ]);
+                $this->sendSkypeNotification($userHodId, $hodNotification->message);
             }
 
             $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
@@ -1032,22 +1042,24 @@ class PRController extends Controller
                     Mail::to($userDeptHodEmail)->send(new TestEmail($data));
 
                     // ADD: Notify user for Revised status
-                    Notification::create([
+                    $userNotification = Notification::create([
                         'user_id' => $revised->user_id,
                         'pr_ticket_id' => $revised->id,
                         'status' => $revised->status,
                         'message' => "Your PR request {$revised->ticketCode} has been Revised. Please review the changes."
                     ]);
+                    $this->sendSkypeNotification($revised->user_id, $userNotification->message);
 
                     // ADD: Optionally notify HOD for Revised status
                     $hodId = $revised->user->deptList->user_hod_id ?? null;
                     if ($hodId) {
-                        Notification::create([
+                        $hodNotification = Notification::create([
                             'user_id' => $hodId,
                             'pr_ticket_id' => $revised->id,
                             'status' => $revised->status,
                             'message' => "PR request {$revised->ticketCode} from {$revised->user->name} has been Revised and needs your review."
                         ]);
+                        $this->sendSkypeNotification($hodId, $hodNotification->message);
                     }
                 }
             }
@@ -1056,4 +1068,47 @@ class PRController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    protected function sendSkypeNotification($userId, $message)
+    {
+        $user = User::find($userId);
+        if (!$user) {
+            Log::error("[SkypeSim] User not found for Skype notification", ['userId' => $userId]);
+            return;
+        }
+
+        $isSimulation = env('SKYPE_SIMULATION', true); // dev purpose default true
+
+        $skypeId = $user->skype_id ?? 'fake_skype_id_' . $userId;
+
+        if ($isSimulation) {
+            $testEndpoint = "https://api.skype.com/v1/messages/send";
+            $testPayload = [
+                'recipient' => $skypeId,
+                'message' => $message,
+                'timestamp' => now()->toDateTimeString(),
+            ];
+            Log::info("[SkypeSim] (SIMULATION) Sending Skype Bot message...", [
+                'endpoint' => $testEndpoint,
+                'payload' => $testPayload,
+            ]);
+            // Optionally persist simulated "sent" record to DB for demo/audit
+            Notification::create([
+                'user_id' => $userId,
+                'pr_ticket_id' => null,
+                'status' => 'simulated_sent',
+                'message' => "[SIMULATION] " . $message,
+            ]);
+            Log::info("[SkypeSim] (SIMULATION) Skype Bot message recorded", [
+                'to' => $user->name,
+                'skype_id' => $skypeId,
+                'message' => $message
+            ]);
+            return;
+        }
+
+        // --- PRODUCTION () ---
+        // Log::warning("[SkypeSim] SKYPE_SIMULATION=false but no real implementation provided. Please implement Microsoft Bot Framework or Microsoft Graph API integration.");
+    }
+
 }
