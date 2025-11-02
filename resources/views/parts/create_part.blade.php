@@ -318,7 +318,7 @@
                     @csrf
                     <div class="mb-3">
                         <label class="form-label">Item Type <span class="text-danger">*</span></label>
-                        <select class="form-select" id="itemTypeSelector" required>
+                        <select class="form-select" id="itemTypeSelector" name="item_type" required>
                             <option value="" selected disabled>Select Item Type</option>
                             <option value="stock">Stock Item</option>
                             <option value="non-stock">Non-Stock Item</option>

@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\File;
 
 // ------------------------- Public Routes -------------------------
 
-// Redirect root ("/") to the login page
 Route::get('/', function () {
     return redirect()->route('login');
 });
@@ -29,10 +28,6 @@ Route::get('/printTicket/{ticketCode}', [PRController::class, 'print'])->name('p
 // ------------------------- Protected Routes -------------------------
 Route::group(['middleware' => 'auth'], function () {
 
-    // Dashboard
-    // Route::get('/dashboard', function () {
-    //     return view('dashboard.dashboard'); 
-    // })->name('dashboard');
     Route::get('/dashboard', [AuthController::class, 'dashboard'])->name('dashboard');
     Route::get('/dashboard/data', [AuthController::class, 'data'])->name('dashboard.data');
 
@@ -84,8 +79,8 @@ Route::group(['middleware' => 'auth'], function () {
     });
     // =================== END OF DEPARTMENT MANAGEMENT =====================
 
-    // Legacy Routes
     Route::get('account', [AccountController::class, 'account'])->name('account');
+    Route::get('dept_user_account', [AccountController::class, 'deptUserAccount'])->name('dept_user_account');
     Route::post('account', [AccountController::class, 'create_account'])->name('create_account');
 
     Route::get('roles', [AccountController::class, 'role'])->name('role');
@@ -128,6 +123,7 @@ Route::group(['middleware' => 'auth'], function () {
     // ======================== END OF NOTIFICATION =========================
 });
 
+
 Route::get('/models-first', function () {
     $modelsPath = app_path('Models');
     $models = collect(File::allFiles($modelsPath))
@@ -144,7 +140,7 @@ Route::get('/models-first', function () {
     foreach ($models as $model) {
         if (class_exists($model)) {
             try {
-                $data[$model] = $model::query()->first(); // first record or null
+                $data[$model] = $model::query()->first();
             } catch (\Throwable $e) {
                 $data[$model] = '⚠️ Error: ' . $e->getMessage();
             }

@@ -230,23 +230,27 @@ class PRController extends Controller
     protected function getCurrentStock($partId)
     {
         $part = partList::findOrFail($partId);
-        if ($part->requires_stock_reduction === 'false') {
+
+        // Jika part tidak memerlukan pengurangan stok, return 'false'
+        if ($part->requires_stock_reduction === 'false' || $part->requires_stock_reduction === 0) {
             return 'false';
         }
 
-        $stock = $part->PartStock->where('operations', 'plus')->sum('quantity') - 
-                 $part->PartStock->where('operations', 'minus')->sum('quantity');
-        $stock = $stock >= 0 ? $stock : 0; // Prevent negative stock
+        // Hitung total stok (Plus - Minus)
+        $plus = $part->PartStock->where('operations', 'plus')->sum('quantity');
+        $minus = $part->PartStock->where('operations', 'minus')->sum('quantity');
+        $stock = max($plus - $minus, 0); // jangan sampai negatif
 
-        // Sync requires_stock_reduction
-        if ($part->requires_stock_reduction !== $stock) {
-            $part->requires_stock_reduction = $stock;
+        // Simpan hasil stok ke kolom current_stock
+        if ($part->current_stock != $stock) {
+            $part->current_stock = $stock;
             $part->save();
-            Log::info('Synced requires_stock_reduction', ['part_id' => $partId, 'new_stock' => $stock]);
+            \Log::info("Stock synced for part ID {$partId}: {$stock}");
         }
 
         return $stock;
     }
+
 
     public function show($id)
     {
@@ -479,6 +483,11 @@ class PRController extends Controller
             $ticket->delete();
             DB::commit();
 
+            $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
+            foreach ($allParts as $partId) {
+                app(\App\Http\Controllers\PartListController::class)->getCurrentStock($partId);
+            }
+
             return response()->json(['message' => 'Ticket successfully deleted']);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -570,6 +579,11 @@ class PRController extends Controller
             ]);
         }
 
+        $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
+        foreach ($allParts as $partId) {
+            app(\App\Http\Controllers\PartListController::class)->getCurrentStock($partId);
+        }
+
         return response()->json(['message' => 'The ticket has been successfully approved by HOD']);
     }
 
@@ -640,37 +654,51 @@ class PRController extends Controller
         $currentUser = auth()->user();
 
         // Authorization check based on hierarchy
-        if ($ticket->status === 'Pending' || $ticket->status === 'Revised') {
+        if (in_array($ticket->status, ['Pending', 'Revised'])) {
             if ($currentUser->id !== $ticket->approved_user_id && $currentUser->role !== 'admin') {
                 return response()->json(['error' => 'Unauthorized to reject this ticket'], 403);
             }
         } elseif ($ticket->status === 'HOD_Approved') {
-            if ($currentUser->role !== 'purchasing' && $currentUser->role !== 'pic' && $currentUser->role !== 'admin') {
+            if (!in_array($currentUser->role, ['purchasing', 'pic', 'admin'])) {
                 return response()->json(['error' => 'Unauthorized to reject this ticket'], 403);
             }
         } else {
             return response()->json(['error' => 'Ticket not in a rejectable state'], 400);
         }
 
+        // Build rejector name and department code
+        $rejectorName = $currentUser->name . ' (' . ($currentUser->deptList->dept_code ?? 'N/A') . ')';
+
+        // Keep status same, add name+dept to reason
+        $reasonInput = $request->input('reason');
         $ticket->status = 'Rejected';
-        $ticket->reason_reject = $request->input('reason');
+        $ticket->reason_reject = "{$reasonInput} — Rejected by {$rejectorName}";
         $ticket->save();
 
-        if ($ticket->save()) {
-            $data = ['ticket' => $ticket->ticketCode, 'status' => $ticket->status];
+        if ($ticket->wasChanged('status')) {
+            $data = [
+                'ticket' => $ticket->ticketCode,
+                'status' => $ticket->status
+            ];
+
             $userHodId = $ticket->user->deptList->user_hod_id;
             $userDeptHodEmail = User::find($userHodId)->email;
 
             Mail::to($userDeptHodEmail)->send(new TestEmail($data));
 
-            // Notify user
             Notification::create([
                 'user_id' => $ticket->user_id,
                 'pr_ticket_id' => $ticket->id,
                 'status' => $ticket->status,
-                'message' => "Your PR request {$ticket->ticketCode} has been Rejected. Reason: {$request->input('reason')}"
+                'message' => "Your PR request {$ticket->ticketCode} has been rejected by {$rejectorName}. Reason: {$reasonInput}"
             ]);
         }
+
+        $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
+        foreach ($allParts as $partId) {
+            app(\App\Http\Controllers\PartListController::class)->getCurrentStock($partId);
+        }
+
         return response()->json(['message' => 'Ticket rejected successfully']);
     }
 
@@ -880,6 +908,11 @@ class PRController extends Controller
                     'status' => $revised->status,
                     'message' => "PR request {$revised->ticketCode} from {$revised->user->name} has been Revised and needs your review."
                 ]);
+            }
+
+            $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
+            foreach ($allParts as $partId) {
+                app(\App\Http\Controllers\PartListController::class)->getCurrentStock($partId);
             }
 
             return response()->json(['message' => 'Request successfully saved']);

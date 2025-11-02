@@ -30,6 +30,7 @@
                                 <th>Request Date</th>
                                 <th>Ticket Code</th>
                                 <th>Requestor</th>
+                                <th>Department</th>
                                 <th>Status</th>
                                 <th>Reason</th>
                                 <th>Actions</th>
@@ -41,6 +42,7 @@
                                 <td>{{ \Carbon\Carbon::parse($dT->created_at)->format('d F Y, h:i A') }}</td>
                                 <td>{{ $dT->ticketCode }}</td>
                                 <td>{{ $dT->user->name }}</td>
+                                <td>{{ $dT->user->deptList->dept_name }}</td>
                                 <td>
                                     @if ($dT->status === 'Pending')
                                         <span class="badge bg-secondary">{{ $dT->status }}</span>

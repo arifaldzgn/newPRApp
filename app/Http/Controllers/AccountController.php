@@ -25,6 +25,15 @@ class AccountController extends Controller
         ]);
     }
 
+    public function deptUserAccount()
+    {
+        $getUserDeptList = auth()->user()->dept_id;
+        return view('account.dept_user_account_index', [
+            'data' => User::where('dept_id', $getUserDeptList)->get(),
+            'deptList' => deptList::all()
+        ]);
+    }
+
     public function create_account(Request $request)
     {
         try {

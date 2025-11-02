@@ -8,6 +8,15 @@
             <ul class="metismenu list-unstyled" id="side-menu">
                 <li class="menu-title" key="t-menu">Menu</li>
 
+                @if(auth()->user()->role === 'admin' || auth()->user()->role === 'purchasing' || auth()->user()->role === 'hod')
+                <li>
+                    <a href="{{ route('dept_user_account') }}" class="waves-effect">
+                        <i class="bx bxs-user-detail"></i>
+                        <span key="t-file-manager">{{ auth()->user()->deptList->dept_code }} Users</span>
+                    </a>
+                </li>
+                @endif
+
 
                 @if(auth()->user()->role === 'admin')
                 <li>

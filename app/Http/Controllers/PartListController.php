@@ -18,72 +18,72 @@ class PartListController extends Controller
 
     public function index()
     {
-        //
-        // return [
-        //     'nonStock' => partList::where('requires_stock_reduction', '=', 'false')->get(),
-        //     'stock' => partList::where('requires_stock_reduction', '!=', 'false')->get()
-        // ];
-        return view('parts.create_part', [
-            'nonStock' => partList::where('requires_stock_reduction', '=', 'false')->get(),
-            'stock' => partList::where('requires_stock_reduction', '!=', 'false')->get()
-        ]);
+        $parts = partList::with('PartStock')->get();
+
+        // Pisahkan berdasarkan kondisi logis
+        $stock = $parts->filter(function ($p) {
+            return $p->requires_stock_reduction == '1';
+        });
+
+        $nonStock = $parts->filter(function ($p) {
+            return $p->requires_stock_reduction == '0';
+        });
+
+
+        // dd($stock, $nonStock);
+
+        return view('parts.create_part', compact('stock', 'nonStock'));
     }
+
+
 
     /**
      * Show the form for creating a new resource.
      */
     public function create(Request $request)
     {
-        //
-        try{
-
+        try {
             $request->validate([
-                'part_name' => 'required',
-                'category' => 'required',
+                'part_name' => 'required|string',
+                'category' => 'required|string',
+                'item_type' => 'required|string|in:stock,non-stock',
+                'stocks' => 'nullable|integer|min:0',
+                'UoM' => 'nullable|string',
+                'type' => 'nullable|string',
             ]);
 
-            if($request->stocks){
-                $newPart = partList::create([
-                    'asset_code_id' => 0,
-                    'part_name' => $request->part_name,
-                    'category' => $request->category,
-                    'UoM' => 'pcs',
-                    'requires_stock_reduction' => true,
-                    'type' => $request->type
-                ]);
+            // Gunakan pilihan user untuk menentukan jenis item
+            $isStockItem = $request->item_type === 'stock';
 
-                $partListId = $newPart->id;
+            $newPart = partList::create([
+                'asset_code_id' => 0,
+                'part_name' => $request->part_name,
+                'category' => $request->category,
+                'UoM' => $request->UoM ?? 'pcs',
+                'requires_stock_reduction' => $isStockItem ? 1 : 0,
+                'type' => $request->type ?? '-',
+                'current_stock' => $isStockItem ? ($request->stocks ?? 0) : 0,
+            ]);
 
+            // Jika tipe item adalah stock, catat transaksi stok awal (boleh 0)
+            if ($isStockItem) {
                 PartStock::create([
-                    'part_list_id' => $partListId,
-                    'quantity' => $request->stocks,
-                    'source' => 'Initial Stock Entry',
+                    'part_list_id' => $newPart->id,
+                    'quantity' => $request->stocks ?? 0,
                     'operations' => 'plus',
-                    'source_type' => 'System', // or 'Initialization'
-                    'source_ref' => auth()->id(), // or null
-                ]);
-
-
-            }else{
-                partList::create([
-                    'asset_code_id' => 0,
-                    'part_name' => $request->part_name,
-                    'category' => $request->category,
-                    'UoM' => $request->UoM,
-                    'requires_stock_reduction' => 'false',
-                    'type' => $request->type
+                    'source' => 'Initial Stock Entry',
+                    'source_type' => 'System',
+                    'source_ref' => auth()->id(),
                 ]);
             }
 
-
-            return response()->json(['message' => 'New Part Successfully added']);
-
-        }catch (\Exception $e){
-
+            return response()->json(['message' => 'New Part successfully added']);
+        } catch (\Exception $e) {
+            \Log::error("Failed to create new part: {$e->getMessage()}");
             return response()->json(['error' => 'Failed to Add New Part'], 500);
-
         }
     }
+
 
     public function test(Request $request)
     {
@@ -138,7 +138,7 @@ class PartListController extends Controller
             $part = partList::findOrFail($prRequest->partlist_id);
 
             // Increase the stock
-            $part->requires_stock_reduction += $request->quantity;
+            $part->current_stock += $request->quantity;
             $part->save();
 
             return response()->json(['message' => 'Stock refunded successfully.']);
@@ -159,94 +159,112 @@ class PartListController extends Controller
 
     public function updatePartList(Request $request)
     {
+        
         $validatedData = $request->validate([
             'part_id' => 'required|exists:part_lists,id',
             'part_name' => 'required|string',
             'category' => 'required|string',
             'description' => 'nullable|string',
-            'quantity' => 'nullable|numeric', 
+            'quantity' => 'nullable|numeric',
         ]);
 
-        $part = PartList::findOrFail($validatedData['part_id']);
+        $part = partList::findOrFail($validatedData['part_id']);
+        // dd($part->requires_stock_reduction);
 
         $part->part_name = $validatedData['part_name'];
         $part->category = $validatedData['category'];
-        $part->type = $validatedData['description'] ?? null;
+        $part->type = $validatedData['description'] ?? $part->type;
         $part->save();
 
-        $quantity = $validatedData['quantity'] ?? 0;
+        $quantity = (float) ($validatedData['quantity'] ?? 0);
 
-        // Only create stock record if quantity is non-zero
-        if ($quantity != 0) {
-            $operation = $quantity >= 0 ? 'plus' : 'minus';
+        // hanya untuk item yang butuh pengurangan stok
+        if ((int) $part->requires_stock_reduction === 1) {
 
-            $part->PartStock()->create([
-                'quantity' => abs($quantity),
-                'operations' => $operation,
-                'source' => 'Manual Adjustment',
-                'source_type' => 'Manual Update',
-                'source_ref' => auth()->id(),
-            ]);
+            // kalau user isi quantity, catat ke PartStock
+            if ($quantity != 0) {
+                $operation = $quantity >= 0 ? 'plus' : 'minus';
+
+                PartStock::create([
+                    'part_list_id' => $part->id,
+                    'quantity' => abs($quantity),
+                    'operations' => $operation,
+                    'source' => 'Manual Adjustment',
+                    'source_type' => 'Manual Update',
+                    'source_ref' => auth()->id(),
+                ]);
+            }
+
+            // selalu update current stock
+            $this->getCurrentStock($part->id);
         }
 
         return response()->json(['message' => 'Part details updated successfully']);
     }
 
-
     protected function getCurrentStock($partId)
     {
         $part = partList::findOrFail($partId);
-        if ($part->requires_stock_reduction === 'false') {
-            return 'false';
+
+        // Skip untuk non-stock item
+        if ((int)$part->requires_stock_reduction === 0) {
+            return $part->current_stock;
         }
 
-        $stock = $part->PartStock->where('operations', 'plus')->sum('quantity') - 
-                 $part->PartStock->where('operations', 'minus')->sum('quantity');
-        $stock = $stock >= 0 ? $stock : 0; // Prevent negative stock
+        $stock = $part->PartStock->where('operations', 'plus')->sum('quantity') -
+                $part->PartStock->where('operations', 'minus')->sum('quantity');
 
-        // Sync requires_stock_reduction
-        if ($part->requires_stock_reduction !== $stock) {
-            $part->requires_stock_reduction = $stock;
-            $part->save();
-            Log::info('Synced requires_stock_reduction', ['part_id' => $partId, 'new_stock' => $stock]);
+        $stock = max($stock, 0);
+
+        if ($part->current_stock != $stock) {
+            $part->update([
+                'current_stock' => $stock,
+                'last_synced_at' => now(),
+            ]);
         }
 
         return $stock;
     }
 
+
+
     public function validateStock(Request $request)
     {
         try {
             $prRequests = $request->input('pr_request', []);
-            Log::info('Validating stock', ['prRequests' => $prRequests]);
 
-            foreach ($prRequests as $index => $prQ) {
+            foreach ($prRequests as $prQ) {
                 $part = partList::findOrFail($prQ['partlist_id']);
                 $qty = (int) $prQ['qty'];
 
-                $currentStock = $this->getCurrentStock($part->id);
-                Log::info('Stock validation', ['part_id' => $part->id, 'qty' => $qty, 'currentStock' => $currentStock]);
-
-                if ($currentStock !== 'false' && is_numeric($currentStock)) {
-                    if ($qty > (int) $currentStock) {
+                // Jika part ini butuh pengurangan stok (stock item)
+                if ((int)$part->requires_stock_reduction === 1) {
+                    if ($part->current_stock <= 0) {
                         return response()->json([
                             'valid' => false,
-                            'error' => "Insufficient stock for part: {$part->part_name} (ID: {$part->id}). Requested: {$qty}, Available: {$currentStock}"
+                            'error' => "Part '{$part->part_name}' is out of stock."
+                        ], 422);
+                    }
+
+                    if ($qty > $part->current_stock) {
+                        return response()->json([
+                            'valid' => false,
+                            'error' => "Insufficient stock for '{$part->part_name}'. Requested: {$qty}, Available: {$part->current_stock}."
                         ], 422);
                     }
                 }
+                // else → non-stock item (requires_stock_reduction = 0)
+                // tidak perlu dicek stoknya, langsung lanjut
             }
 
             return response()->json(['valid' => true]);
-        } catch (Exception $e) {
-            Log::error('Stock validation error', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all(),
-            ]);
+        } catch (\Exception $e) {
+            \Log::error('Stock validation failed: ' . $e->getMessage());
             return response()->json(['valid' => false, 'error' => 'Failed to validate stock'], 500);
         }
     }
+
+
 
     public function log()
     {

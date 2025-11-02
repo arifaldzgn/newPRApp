@@ -29,7 +29,7 @@
             <!-- App Search-->
             <form class="app-search d-none d-lg-block">
                 <div class="position-relative">
-                    <input type="text" class="form-control" placeholder="Search...">
+                    <input type="text" id="sidebarSearch" class="form-control" placeholder="Search menu...">
                     <span class="bx bx-search-alt"></span>
                 </div>
             </form>

@@ -1,17 +1,21 @@
 @extends('layouts.master')
 
-@section('title', 'Manage Users Account')
-@section('description', 'User account management page')
+@php
+    $getDeptCode = auth()->user()->deptList ? auth()->user()->deptList->dept_code : 'N/A';
+@endphp
+
+@section('title', $getDeptCode . ' Users')
+@section('description', 'List User account page for ' . $getDeptCode . ' department')
 
 @section('content')
     <div class="row">
         <div class="col-12">
             <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0 font-size-18">Manage Users Account</h4>
-                <button type="button" class="btn btn-success waves-effect waves-light" data-bs-target="#createAccountModal"
+                <h4 class="mb-sm-0 font-size-18">{{ $getDeptCode }} - Users</h4>
+                {{-- <button type="button" class="btn btn-success waves-effect waves-light" data-bs-target="#createAccountModal"
                     data-bs-toggle="modal">
                     <i class="bx bx-check-double font-size-16 align-middle me-2"></i> Add New User
-                </button>
+                </button> --}}
             </div>
         </div>
     </div>
@@ -20,8 +24,8 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
-                    <h4 class="card-title">Users Management</h4>
-                    <p class="card-description text-muted"><small>All user accounts with changeable <code>Roles</code></small></p>
+                    <h4 class="card-title">Users List</h4>
+                    {{-- <p class="card-description text-muted"><small>All user accounts with changeable <code>Roles</code></small></p> --}}
                     <table id="example" class="table table-striped" style="width:100%">
                         <thead>
                             <tr>
@@ -33,7 +37,7 @@
                                 <th>PIC Name</th>
                                 <th>Role</th>
                                 <th>Status</th>
-                                <th class="t-center">Action</th>
+                                {{-- <th class="t-center">Action</th> --}}
                             </tr>
                         </thead>
                         <tbody>
@@ -61,7 +65,7 @@
                                             {{ $d->status ?? 'Active' }}
                                         </span>
                                     </td>
-                                    <td>
+                                    {{-- <td>
                                         <div class="dropdown">
                                             <button class="btn btn-light dropdown-toggle" type="button"
                                                 id="dropdownMenuButton-{{ $d->id }}" data-bs-toggle="dropdown" aria-expanded="false">
@@ -78,7 +82,7 @@
                                                 @endif
                                             </div>
                                         </div>
-                                    </td>
+                                    </td> --}}
                                 </tr>
                             @endforeach
                         </tbody>

@@ -111,18 +111,23 @@
         #ticketModal .collapse.show {
             display: block;
         }
-                            /* Make readonly fields visually distinct but consistent */
-                            input[readonly] {
-                                background-color: #f8f9fa !important; /* light gray background */
-                                color: #6c757d !important; /* muted text color */
-                                cursor: not-allowed;
-                                border-color: #dee2e6;
-                            }
+        /* Make readonly fields visually distinct but consistent */
+        input[readonly] {
+            background-color: #f8f9fa !important; /* light gray background */
+            color: #6c757d !important; /* muted text color */
+            cursor: not-allowed;
+            border-color: #dee2e6;
+        }
 
-                            input[readonly]:focus {
-                                box-shadow: none;
-                                border-color: #dee2e6;
-                            }
+        input[readonly]:focus {
+            box-shadow: none;
+            border-color: #dee2e6;
+        }
+
+        .text-warning { 
+            color: #ffc107 !important; 
+        }
+
     </style>
 
     @stack('styles')
@@ -555,9 +560,48 @@
     }
     </script>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('sidebarSearch');
+            const menuItems = document.querySelectorAll('#side-menu li a');
 
+            if (!searchInput) return; // prevent errors if search bar is missing
 
-    
+            searchInput.addEventListener('input', function() {
+                const query = this.value.toLowerCase().trim();
+
+                menuItems.forEach(link => {
+                    const text = link.textContent.toLowerCase();
+
+                    // reset highlighting
+                    link.innerHTML = link.textContent;
+
+                    if (query === '') {
+                        link.closest('li').style.display = '';
+                        return;
+                    }
+
+                    if (text.includes(query)) {
+                        link.closest('li').style.display = '';
+                        // expand submenus for matches
+                        const parents = link.closest('ul.sub-menu');
+                        if (parents) {
+                            parents.style.display = 'block';
+                            const parentLi = parents.closest('li');
+                            if (parentLi) parentLi.style.display = '';
+                        }
+
+                        // highlight matched text
+                        const regex = new RegExp(`(${query})`, 'gi');
+                        link.innerHTML = link.textContent.replace(regex, '<span class="text-warning fw-bold">$1</span>');
+
+                    } else {
+                        link.closest('li').style.display = 'none';
+                    }
+                });
+            });
+        });
+        </script>
 
     @yield('page-vendors-scripts')
 
