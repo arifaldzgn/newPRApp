@@ -20,7 +20,6 @@ class PartListController extends Controller
     {
         $parts = partList::with('PartStock')->get();
 
-        // Pisahkan berdasarkan kondisi logis
         $stock = $parts->filter(function ($p) {
             return $p->requires_stock_reduction == '1';
         });
@@ -52,7 +51,7 @@ class PartListController extends Controller
                 'type' => 'nullable|string',
             ]);
 
-            // Gunakan pilihan user untuk menentukan jenis item
+            //  jenis item stock / non
             $isStockItem = $request->item_type === 'stock';
 
             $newPart = partList::create([
@@ -65,7 +64,6 @@ class PartListController extends Controller
                 'current_stock' => $isStockItem ? ($request->stocks ?? 0) : 0,
             ]);
 
-            // Jika tipe item adalah stock, catat transaksi stok awal (boleh 0)
             if ($isStockItem) {
                 PartStock::create([
                     'part_list_id' => $newPart->id,
@@ -103,10 +101,8 @@ class PartListController extends Controller
     public function delete_part($id)
     {
         try {
-            // Find the PartList to be deleted
             $part = PartList::findOrFail($id);
 
-            // Log the deletion in part_list_log_histories table
             PartListLogHistories::create([
                 'action' => 'delete',
                 'part_list_id' => $id,
@@ -118,15 +114,12 @@ class PartListController extends Controller
                 'user_id' => auth()->user()->id,
             ]);
 
-            // Delete the PartList
             $part->delete();
 
             return response()->json(['message' => 'Part successfully deleted']);
         } catch (\Exception $e) {
-            // Log the error message and stack trace
             Log::error('Failed to delete the part: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
 
-            // Return a generic error response
             return response()->json(['error' => 'Failed to delete the part'], 500);
         }
     }
@@ -137,7 +130,7 @@ class PartListController extends Controller
             $prRequest = prRequest::findOrFail($request->pr_id);
             $part = partList::findOrFail($prRequest->partlist_id);
 
-            // Increase the stock
+            // Increase the stock 
             $part->current_stock += $request->quantity;
             $part->save();
 
@@ -169,7 +162,6 @@ class PartListController extends Controller
         ]);
 
         $part = partList::findOrFail($validatedData['part_id']);
-        // dd($part->requires_stock_reduction);
 
         $part->part_name = $validatedData['part_name'];
         $part->category = $validatedData['category'];
@@ -178,10 +170,8 @@ class PartListController extends Controller
 
         $quantity = (float) ($validatedData['quantity'] ?? 0);
 
-        // hanya untuk item yang butuh pengurangan stok
         if ((int) $part->requires_stock_reduction === 1) {
 
-            // kalau user isi quantity, catat ke PartStock
             if ($quantity != 0) {
                 $operation = $quantity >= 0 ? 'plus' : 'minus';
 
@@ -195,7 +185,6 @@ class PartListController extends Controller
                 ]);
             }
 
-            // selalu update current stock
             $this->getCurrentStock($part->id);
         }
 
@@ -237,7 +226,7 @@ class PartListController extends Controller
                 $part = partList::findOrFail($prQ['partlist_id']);
                 $qty = (int) $prQ['qty'];
 
-                // Jika part ini butuh pengurangan stok (stock item)
+                // (stock item)
                 if ((int)$part->requires_stock_reduction === 1) {
                     if ($part->current_stock <= 0) {
                         return response()->json([
@@ -253,8 +242,7 @@ class PartListController extends Controller
                         ], 422);
                     }
                 }
-                // else → non-stock item (requires_stock_reduction = 0)
-                // tidak perlu dicek stoknya, langsung lanjut
+                // else  non-stock item (requires_stock_reduction = 0)
             }
 
             return response()->json(['valid' => true]);
@@ -268,9 +256,7 @@ class PartListController extends Controller
 
     public function log()
     {
-        // return PartStock::orderBy('created_at', 'desc')->get();
         return view('parts.pr_log', [
-            // 'logs' => PrLogHistory::orderBy('created_at', 'asc')->get(),
             'partStockLogs' => PartStock::orderBy('created_at', 'desc')->get()
         ]);
     }
