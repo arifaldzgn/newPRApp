@@ -40,11 +40,10 @@ class PRController extends Controller
                 // Get tickets where user_id is in the department
                 $dataT = prTicket::whereIn('user_id', $deptUserIds)->get();
             } else {
-                // If HOD is not assigned to a department, show no tickets
-                $dataT = collect(); // Empty collection
+                $dataT = collect(); 
             }
         } else {
-            // Clerk or other roles can only see their own tickets
+            // own ticket
             $dataT = prTicket::where('user_id', $user->id)->get();
         }
 
@@ -56,34 +55,30 @@ class PRController extends Controller
 
     public function generateUniqueTicketCode()
     {
-        $currentYear = date('y'); // e.g., "25"
-        $currentMonth = date('m'); // e.g., "11"
-        $prefix = $currentYear . $currentMonth; // "2511"
+        $currentYear = date('y'); 
+        $currentMonth = date('m'); 
+        $prefix = $currentYear . $currentMonth; // 00 00 00 format
 
-        // Gunakan transaksi untuk lock sequence
         return DB::transaction(function () use ($prefix, $currentYear, $currentMonth) {
-            // Ambil kode terakhir bulan ini
+            // last code this month
             $lastTicket = prTicket::whereRaw("REPLACE(ticketCode, ' ', '') LIKE ?", [$prefix . '%'])
                 ->lockForUpdate()
                 ->orderBy('ticketCode', 'desc')
                 ->first();
 
-            // Ambil nomor terakhir, default 0
+            // last number 
             $lastNumber = 0;
             if ($lastTicket) {
                 $clean = preg_replace('/\s+/', '', $lastTicket->ticketCode); // hapus spasi
-                $lastNumber = (int) substr($clean, -3); // ambil 3 digit terakhir
+                $lastNumber = (int) substr($clean, -3); // 3 digit number
             }
 
             $nextNumber = $lastNumber + 1;
             $ticketNumber = str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
 
-            // Format final ticket code, misal "25 11 001"
             $ticketCode = "{$currentYear} {$currentMonth} {$ticketNumber}";
 
-            // Pastikan belum ada (meskipun kecil kemungkinannya)
             if (prTicket::where('ticketCode', $ticketCode)->exists()) {
-                // Tambah randomizer fallback
                 $ticketCode = "{$currentYear} {$currentMonth} " . str_pad(rand(1, 999), 3, '0', STR_PAD_LEFT);
             }
 
@@ -95,16 +90,13 @@ class PRController extends Controller
     public function create(Request $request)
     {
         try {
-            // === 1. Authorization ===
             if (!in_array(auth()->user()->role, ['admin', 'hod', 'clerk', 'regular', 'purchasing', 'pic'])) {
                 return response()->json(['error' => 'Unauthorized to create ticket'], 403);
             }
 
-            // === 2. DEBUG: Log incoming data ===
             Log::info('PR Request Input', $request->all());
             Log::info('PR Files', $request->allFiles());
 
-            // === 3. Validate Input (NO file rules) ===
             $validatedData = $request->validate([
                 'pr_request.*.part_name'       => 'required|string|min:1',
                 'pr_request.*.partlist_id'     => 'required|integer|exists:part_lists,id',
@@ -119,7 +111,6 @@ class PRController extends Controller
                 'advance_cash'                 => 'nullable|numeric|min:0',
             ]);
 
-            // === 4. User & Approval Setup ===
             $user   = auth()->user();
             $userId = $user->id;
             $hodId  = $user->deptList->user_hod_id ?? $userId;
@@ -129,11 +120,9 @@ class PRController extends Controller
 
             $ticketCode = $this->generateUniqueTicketCode();
 
-            // === 5. DB Transaction: Core + Stock + Documents ===
             $newTicket = DB::transaction(function () use (
                 $ticketCode, $userId, $hodId, $picId, $validatedData, $request
             ) {
-                // Create Ticket
                 $ticket = prTicket::create([
                     'ticketCode'                 => $ticketCode,
                     'status'                     => 'Pending',
@@ -144,12 +133,11 @@ class PRController extends Controller
                     'advance_cash'               => $request->advance_cash ?? 0,
                 ]);
 
-                // Process Each Request Line
                 foreach ($validatedData['pr_request'] as $index => $prQ) {
                     $part = partList::findOrFail($prQ['partlist_id']);
                     $qty  = (int) $prQ['qty'];
 
-                    // === Stock Reduction Logic ===
+                    // stock reduction 
                     $currentStock = $this->getCurrentStock($part->id);
                     if ($currentStock !== 'false' && is_numeric($currentStock)) {
                         $newStock = (int) $currentStock - $qty;
@@ -170,17 +158,14 @@ class PRController extends Controller
                         ]);
                     }
 
-                    // === Create PR Request ===
                     $prQ['ticket_id'] = $ticket->id;
                     $prRequest = prRequest::create($prQ);
 
-                    // === Upload Documents (Optional) ===
                     $fileKey = "pr_request.{$index}.documents";
                     if ($request->hasFile($fileKey)) {
                         Log::info("Files found for index {$index}", [$fileKey => $request->file($fileKey)]);
 
                         foreach ($request->file($fileKey) as $file) {
-                            // Manual validation
                             if (!$file->isValid()) {
                                 Log::warning("Invalid file skipped", ['name' => $file->getClientOriginalName()]);
                                 continue;
@@ -198,12 +183,10 @@ class PRController extends Controller
                                 continue;
                             }
 
-                            // Save file
                             $originalName = $file->getClientOriginalName();
                             $mimeType     = $file->getMimeType() ?? 'application/octet-stream';
                             $fileSize     = $file->getSize();
 
-                            // Now move
                             $fileName = time() . '_' . uniqid() . '.' . $ext;
                             $file->move(public_path('assets/pr-documents'), $fileName);
 
@@ -230,7 +213,6 @@ class PRController extends Controller
                 return $ticket;
             });
 
-            // === 6. Send Email & Notifications ===
             try {
                 $hodEmail = User::find($hodId)->email ?? 'ariffalkzn@gmail.com';
                 Mail::to($hodEmail)->queue(new TestEmail([
@@ -307,12 +289,10 @@ class PRController extends Controller
             return 'false';
         }
 
-        // Hitung total stok (Plus - Minus)
         $plus = $part->PartStock->where('operations', 'plus')->sum('quantity');
         $minus = $part->PartStock->where('operations', 'minus')->sum('quantity');
-        $stock = max($plus - $minus, 0); // jangan sampai negatif
+        $stock = max($plus - $minus, 0); // 
 
-        // Simpan hasil stok ke kolom current_stock
         if ($part->current_stock != $stock) {
             $part->current_stock = $stock;
             $part->save();
@@ -328,7 +308,6 @@ class PRController extends Controller
         $user = auth()->user();
         $ticket = prTicket::findOrFail($id);
 
-        // Authorization check...
         if ($user->role !== 'admin' && $user->role !== 'purchasing' && $user->role !== 'hod') {
             if ($user->role === 'hod') {
                 $dept = deptList::where('user_hod_id', $user->id)->first();
@@ -342,7 +321,6 @@ class PRController extends Controller
             }
         }
 
-        // === EAGER LOAD DOCUMENTS ===
         $ticketRequests = prRequest::with('documents')->where('ticket_id', $id)->get();
 
         $advanceCash = $ticket->advance_cash ?? 0;
@@ -351,7 +329,6 @@ class PRController extends Controller
         $approver = $ticket->approved_user_id ? User::find($ticket->approved_user_id) : null;
         $purchasingApprover = $ticket->purchasing_approved_user_id ? User::find($ticket->purchasing_approved_user_id) : null;
 
-        // === MAP DOCUMENTS FOR JS ===
         $ticketRequests = $ticketRequests->map(function ($pr) {
             return [
                 'id' => $pr->id,
@@ -429,7 +406,7 @@ class PRController extends Controller
                                  ->whereIn('status', ['Pending', 'Revised', 'HOD_Approved'])
                                  ->get();
             } else {
-                $dataT = collect(); // Empty collection if no department
+                $dataT = collect(); 
             }
         } else {
             // Clerk can see their own pending tickets, including HOD_Approved
@@ -461,7 +438,7 @@ class PRController extends Controller
                                  ->where('status', 'Approved')
                                  ->get();
             } else {
-                $dataT = collect(); // Empty collection if no department
+                $dataT = collect();
             }
         } else {
             // Clerk can only see their own approved tickets
@@ -520,10 +497,8 @@ class PRController extends Controller
 
             DB::beginTransaction();
 
-            // MOVED: Load ticket with relations once (reuse for stock and notifications)
             $ticket = prTicket::with(['user.deptList', 'prRequest'])->findOrFail($id);
 
-            // MOVED: Create notifications BEFORE delete (avoids FK constraint on commit)
             $userNotification = Notification::create([
                 'user_id' => $ticket->user_id,
                 'pr_ticket_id' => $ticket->id,
@@ -567,7 +542,6 @@ class PRController extends Controller
                 }
 
                 if ($part->requires_stock_reduction !== "false" && (int)$part->requires_stock_reduction > 0) {
-                    // tambah stok ke part_lists
                     $part->requires_stock_reduction = (int)$part->requires_stock_reduction + $quantity;
                     $part->save();
 
@@ -617,16 +591,13 @@ class PRController extends Controller
             return response()->json(['error' => 'Unauthorized to delete this part'], 403);
         }
 
-        // Find the prRequest instance
         $part = prRequest::findOrFail($id);
 
-        // Retrieve the required data
         $quantity = $part->qty;
         $partlist_id = $part->partlist_id;
         $ticketId = $part->ticket_id; 
         $ticketCode = prTicket::find($ticketId)->ticketCode;
 
-        // Store the data in PartStock
         $getPart = PartList::find($partlist_id);
         $getFalse = $getPart->requires_stock_reduction;
 
@@ -655,7 +626,7 @@ class PRController extends Controller
                 return response()->json(['error' => 'Unauthorized to approve this ticket'], 403);
             }
 
-            // Status harus Pending atau Revised
+            // pending revised only
             if (!in_array($ticket->status, ['Pending', 'Revised'])) {
                 return response()->json(['error' => 'Ticket must be Pending or Revised to approve'], 400);
             }
@@ -665,15 +636,13 @@ class PRController extends Controller
             $ticket->date_approval = date('Y-m-d');
             $ticket->approved_user_id = $currentUser->id;
             $ticket->save();
-            $ticket->refresh(); // pastikan ID dan relasi valid
+            $ticket->refresh(); 
 
-            // Refresh stock untuk semua part terkait
             $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
             foreach ($allParts as $partId) {
                 $this->getCurrentStock($partId);
             }
 
-            // Kirim email ke PIC/purchasing jika ada
             $picId = $ticket->purchasing_approved_user_id;
             if ($picId) {
                 $picEmail = User::find($picId)->email ?? null;
@@ -685,7 +654,6 @@ class PRController extends Controller
                 }
             }
 
-            // Notifikasi ke user yang buat PR
             Notification::create([
                 'user_id' => $ticket->user_id,
                 'pr_ticket_id' => $ticket->id,
@@ -693,7 +661,6 @@ class PRController extends Controller
                 'message' => "Your PR request {$ticket->ticketCode} has been approved by HOD and is now pending purchasing approval."
             ]);
 
-            // Notifikasi ke PIC/purchasing jika ada
             if ($picId) {
                 Notification::create([
                     'user_id' => $picId,
@@ -703,7 +670,6 @@ class PRController extends Controller
                 ]);
             }
 
-            // Email ke HOD (optional, bisa dikirim ke atasan)
             $userHodId = $ticket->user->deptList->user_hod_id ?? null;
             if ($userHodId) {
                 $userDeptHodEmail = User::find($userHodId)->email ?? null;
@@ -747,14 +713,12 @@ class PRController extends Controller
             $userId = $ticket->user_id;
             $ticketCode = $ticket->ticketCode;
 
-            // Email
             $userEmail = optional($ticket->user)->email ?? 'ariffalkzn@gmail.com';
             Mail::to($userEmail)->send(new TestEmail([
                 'ticket' => $ticketCode,
                 'status' => $ticket->status
             ]));
 
-            // Notifications (only if user_id and ticket_id exist)
             if ($ticketId && $userId) {
                 Notification::create([
                     'user_id' => $userId,
@@ -764,7 +728,6 @@ class PRController extends Controller
                 ]);
             }
 
-            // Optional notification to approver (current user)
             if ($ticketId && $currentUser->id) {
                 Notification::create([
                     'user_id' => $currentUser->id,
@@ -774,7 +737,6 @@ class PRController extends Controller
                 ]);
             }
 
-            // Refresh stock
             $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
             foreach ($allParts as $partId) {
                 $this->getCurrentStock($partId);
@@ -836,37 +798,31 @@ class PRController extends Controller
                 return response()->json(['error' => 'Ticket not in a rejectable state'], 400);
             }
 
-            // Build rejector name and department code
             $rejectorName = $currentUser->name . ' (' . ($currentUser->deptList->dept_code ?? 'N/A') . ')';
 
-            // Update status and reason
             $reasonInput = $request->input('reason');
             $ticket->status = 'Rejected';
             $ticket->reason_reject = "{$reasonInput} — Rejected by {$rejectorName}";
             $ticket->save();
-            $ticket->refresh(); // Pastikan ticket terbaru dan ID valid
+            $ticket->refresh(); 
 
-            // Refresh current_stock untuk semua part terkait
             $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
             foreach ($allParts as $partId) {
                 $this->getCurrentStock($partId);
             }
 
-            // Send email and notifications
             if ($ticket->wasChanged('status')) {
                 $data = [
                     'ticket' => $ticket->ticketCode,
                     'status' => $ticket->status,
                 ];
 
-                // Email ke HOD
                 $userHodId = $ticket->user->deptList->user_hod_id ?? null;
                 if ($userHodId) {
                     $userDeptHodEmail = User::find($userHodId)->email;
                     Mail::to($userDeptHodEmail)->send(new TestEmail($data));
                 }
 
-                // Notify user
                 Notification::create([
                     'user_id' => $ticket->user_id,
                     'pr_ticket_id' => $ticket->id,
@@ -874,7 +830,6 @@ class PRController extends Controller
                     'message' => "Your PR request {$ticket->ticketCode} has been rejected by {$rejectorName}. Reason: {$reasonInput}"
                 ]);
 
-                // Notify HOD if exists
                 if ($userHodId) {
                     Notification::create([
                         'user_id' => $userHodId,
@@ -896,10 +851,8 @@ class PRController extends Controller
         try {
             $currentUser = auth()->user();
 
-            // === LOAD TICKET WITH RELATIONSHIPS ===
             $ticket = prTicket::with(['prRequest.documents', 'user.deptList'])->findOrFail($id);
 
-            // === AUTHORIZATION ===
             $isOwner = $ticket->user_id === $currentUser->id;
             $isHod = ($currentUser->role === 'hod') && 
                     $ticket->user->deptList && 
@@ -914,7 +867,6 @@ class PRController extends Controller
                 return response()->json(['error' => 'Ticket cannot be canceled in current state'], 400);
             }
 
-            // === UPDATE STATUS ===
             $reason = $request->input('reason', 'No reason provided');
             $canceler = $currentUser->name . ' (' . ($currentUser->deptList->dept_code ?? 'N/A') . ')';
 
@@ -922,10 +874,8 @@ class PRController extends Controller
             $ticket->reason_reject = "{$reason} — Canceled by {$canceler}";
             $ticket->save();
 
-            // === RELOAD RELATIONSHIPS ===
             $ticket->load('prRequest.documents');
 
-            // === RESTORE STOCK + DELETE FILES ===
             foreach ($ticket->prRequest as $pr) {
                 $part = PartList::find($pr->partlist_id);
                 if ($part && $part->requires_stock_reduction !== "false") {
@@ -939,7 +889,6 @@ class PRController extends Controller
                     ]);
                 }
 
-                // Delete files
                 foreach ($pr->documents as $doc) {
                     $filePath = public_path($doc->file_path);
                     if (file_exists($filePath)) {
@@ -948,10 +897,9 @@ class PRController extends Controller
                 }
 
                 $pr->documents()->delete();
-                $pr->delete(); // Soft delete
+                $pr->delete(); 
             }
 
-            // === REFRESH STOCK (use soft-deleted) ===
             $partIds = $ticket->prRequest()
                 ->withTrashed()
                 ->pluck('partlist_id')
@@ -961,7 +909,6 @@ class PRController extends Controller
                 $this->getCurrentStock($partId);
             }
 
-            // === NOTIFICATIONS ===
             $userHodId = $ticket->user->deptList->user_hod_id ?? null;
 
             Notification::create([
@@ -1068,7 +1015,7 @@ class PRController extends Controller
             $submittedIds = [];
             $processedIds = [];
 
-            // Collect submitted IDs and determine ticket ID
+            // Collect submitted IDs and get ticket ID
             foreach ($request->pr_request ?? [] as $pRQ) {
                 if (isset($pRQ['id']) && !in_array($pRQ['id'], $submittedIds)) {
                     $submittedIds[] = $pRQ['id'];
@@ -1082,7 +1029,6 @@ class PRController extends Controller
                 return response()->json(['error' => 'Ticket ID not found'], 400);
             }
 
-            // Get ticket and check authorization
             $ticket = prTicket::findOrFail($ticketId);
             $user = auth()->user();
             $isOwner = $ticket->user_id === $user->id;
@@ -1101,7 +1047,7 @@ class PRController extends Controller
             foreach ($idsToDelete as $deleteId) {
                 $prToDelete = prRequest::find($deleteId);
                 if ($prToDelete) {
-                    // === DELETE FILES FROM DISK ===
+                    // disk removal
                     foreach ($prToDelete->documents as $doc) {
                         $filePath = public_path($doc->file_path);
                         if (file_exists($filePath)) {
@@ -1109,7 +1055,6 @@ class PRController extends Controller
                         }
                     }
 
-                    // === RESTORE STOCK ===
                     $part = PartList::find($prToDelete->partlist_id);
                     if ($part && $part->requires_stock_reduction !== "false") {
                         PartStock::create([
@@ -1122,13 +1067,11 @@ class PRController extends Controller
                         ]);
                     }
 
-                    // === DELETE DB RECORDS ===
-                    $prToDelete->documents()->delete(); // Delete all documents
-                    $prToDelete->delete();              // Delete request
+                    $prToDelete->documents()->delete(); 
+                    $prToDelete->delete();              
                 }
             }
 
-            // Update submitted PR requests
             foreach ($request->pr_request ?? [] as $pRQ) {
                 if (!isset($pRQ['id']) || in_array($pRQ['id'], $processedIds)) continue;
 
@@ -1163,12 +1106,10 @@ class PRController extends Controller
                 $processedIds[] = $pRQ['id'];
             }
 
-            // Update ticket
             $ticket->status = 'Revised';
             $ticket->advance_cash = $request->input('advance_cash');
             $ticket->save();
 
-            // Send email
             $userHodId = $ticket->user->deptList->user_hod_id ?? null;
             $userDeptHodEmail = $userHodId ? User::find($userHodId)->email : null;
             if ($userDeptHodEmail) {
@@ -1178,7 +1119,6 @@ class PRController extends Controller
                 ]));
             }
 
-            // Notifications
             Notification::create([
                 'user_id' => $ticket->user_id,
                 'pr_ticket_id' => $ticket->id,
@@ -1194,7 +1134,6 @@ class PRController extends Controller
                 ]);
             }
 
-            // Refresh stock
             $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
             foreach ($allParts as $partId) {
                 $this->getCurrentStock($partId);
@@ -1214,7 +1153,6 @@ class PRController extends Controller
             $submittedIds = [];
             $processedIds = [];
 
-            // Ambil semua PR request dari input
             foreach ($request->pr_request ?? [] as $pRQ) {
                 if (isset($pRQ['id']) && !in_array($pRQ['id'], $submittedIds)) {
                     $submittedIds[] = $pRQ['id'];
@@ -1228,7 +1166,6 @@ class PRController extends Controller
                 return response()->json(['error' => 'Ticket ID not found'], 400);
             }
 
-            // Ambil ticket + relasi user & deptList (HOD)
             $ticket = prTicket::with('user.deptList')->findOrFail($ticketId);
             $user = auth()->user();
             $isOwner = $ticket->user_id === $user->id;
@@ -1239,14 +1176,12 @@ class PRController extends Controller
                 return response()->json(['error' => 'Unauthorized to update this ticket'], 403);
             }
 
-            // DELETE PR requests yang sudah dihapus & restore stock
             $existingPrRequests = prRequest::where('ticket_id', $ticketId)->get();
             $idsToDelete = array_diff($existingPrRequests->pluck('id')->toArray(), $submittedIds);
 
             foreach ($idsToDelete as $deleteId) {
                 $prToDelete = prRequest::find($deleteId);
                 if ($prToDelete) {
-                    // === DELETE FILES FROM DISK ===
                     foreach ($prToDelete->documents as $doc) {
                         $filePath = public_path($doc->file_path);
                         if (file_exists($filePath)) {
@@ -1254,7 +1189,6 @@ class PRController extends Controller
                         }
                     }
 
-                    // === RESTORE STOCK ===
                     $part = PartList::find($prToDelete->partlist_id);
                     if ($part && $part->requires_stock_reduction !== "false") {
                         PartStock::create([
@@ -1267,13 +1201,11 @@ class PRController extends Controller
                         ]);
                     }
 
-                    // === DELETE DB RECORDS ===
-                    $prToDelete->documents()->delete(); // Delete all documents
-                    $prToDelete->delete();              // Delete request
+                    $prToDelete->documents()->delete(); 
+                    $prToDelete->delete();              
                 }
             }
 
-            // Update PR requests yang ada
             foreach ($request->pr_request ?? [] as $pRQ) {
                 if (in_array($pRQ['id'], $processedIds)) continue;
 
@@ -1308,16 +1240,13 @@ class PRController extends Controller
                 $processedIds[] = $pRQ['id'];
             }
 
-            // Update ticket status
             $ticket->status = 'Revised';
             $ticket->advance_cash = $request->input('advance_cash');
             $ticket->save();
 
-            // Reload relasi user & deptList agar HOD valid
             $ticket->load('user.deptList');
             $userHodId = $ticket->user->deptList->user_hod_id ?? null;
 
-            // Kirim email & notifikasi
             if ($userHodId) {
                 $userDeptHodEmail = User::find($userHodId)->email;
                 Mail::to($userDeptHodEmail)->send(new TestEmail([
@@ -1326,7 +1255,6 @@ class PRController extends Controller
                 ]));
             }
 
-            // Notifikasi ke user
             Notification::create([
                 'user_id' => $ticket->user_id,
                 'pr_ticket_id' => $ticket->id,
@@ -1334,7 +1262,6 @@ class PRController extends Controller
                 'message' => "Your PR request {$ticket->ticketCode} has been Revised. Please review the changes."
             ]);
 
-            // Notifikasi ke HOD
             if ($userHodId) {
                 Notification::create([
                     'user_id' => $userHodId,
@@ -1344,7 +1271,6 @@ class PRController extends Controller
                 ]);
             }
 
-            // Refresh stock untuk semua part terkait
             $allParts = $ticket->prRequest()->pluck('partlist_id')->unique();
             foreach ($allParts as $partId) {
                 $this->getCurrentStock($partId);
@@ -1390,7 +1316,7 @@ class PRController extends Controller
         }
 
         // --- PRODUCTION () ---
-        // Log::warning("[SkypeSim] SKYPE_SIMULATION=false but no real implementation provided. Please implement Microsoft Bot Framework or Microsoft Graph API integration.");
+        
     }
 
 }
