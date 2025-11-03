@@ -44,12 +44,10 @@
                                 <td>{{ $dT->user->name }}</td>
                                 <td>{{ $dT->user->deptList->dept_name }}</td>
                                 <td>
-                                    @if ($dT->status === 'Pending')
-                                        <span class="badge bg-secondary">{{ $dT->status }}</span>
-                                    @elseif ($dT->status === 'Rejected')
-                                        <span class="badge bg-danger">{{ $dT->status }}</span>
-                                    @else
-                                        <span class="badge bg-success">{{ $dT->status }}</span>
+                                    @if ($dT->status === 'Rejected')
+                                        <span class="badge bg-danger">Rejected</span>
+                                    @elseif ($dT->status === 'Canceled')
+                                        <span class="badge bg-dark">Canceled</span>
                                     @endif
                                 </td>
                                 <td>
@@ -335,8 +333,8 @@
             });
 
             // Update button handler
-           $('.updateBtn').click(function() {
-                deletedMaterials = []; // Reset on each open
+            $('.updateBtn').click(function() {
+                deletedMaterials = [];
                 const requestId = $(this).data('request-id');
                 $('#approveButton').data('request-id', requestId);
                 $('#rejectButton').data('request-id', requestId);
@@ -349,58 +347,39 @@
                         let itemCount = 1;
                         let materialCount = 0;
 
-                        // === Optional Document Section ===
+                        // Remove global doc section
                         $('#existingDocuments').empty();
+                        $('#enableDocumentSection').prop('checked', false);
+                        $('#documentSection').hide();
 
-                        if (response.documents && response.documents.length > 0) {
-                            $('#enableDocumentSection').prop('checked', true);
-                            $('#documentSection').show();
-
-                            response.documents.forEach(function(doc) {
-                                $('#existingDocuments').append(`
-                                    <div class="d-flex align-items-center justify-content-between border rounded p-2 mb-2">
-                                        <div>
-                                            <i class="bi bi-file-earmark-text me-2"></i>
-                                            <a href="${doc.url}" target="_blank">${doc.name}</a>
-                                        </div>
-                                        <button type="button" class="btn btn-sm btn-outline-danger remove-document" data-doc-id="${doc.id}">
-                                            <i class="bi bi-x-lg"></i> Remove Document
-                                        </button>
-                                    </div>
-                                `);
-                            });
-                        } else {
-                            $('#enableDocumentSection').prop('checked', false);
-                            $('#documentSection').hide();
-                        }
-
-                        // === Validate Material Data ===
                         if (!response.pr_requests || !Array.isArray(response.pr_requests)) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error',
-                                text: 'Invalid data received from server.'
-                            });
+                            Swal.fire('Error', 'Invalid data from server.', 'error');
                             return;
                         }
 
-                        // === Loop Each Material ===
                         $.each(response.pr_requests, function(index, pr_request) {
-                            if (!pr_request || typeof pr_request !== 'object' || !pr_request.partlist_id) {
-                                return;
-                            }
+                            if (!pr_request?.partlist_id) return;
 
-                            const id = pr_request.partlist_id;
                             $.ajax({
-                                url: '/retrieve-part-name/' + id,
+                                url: '/retrieve-part-name/' + pr_request.partlist_id,
                                 method: 'GET',
                                 success: function(partData) {
-                                    const partName = partData.part_name || '';
-                                    if (!partName) return;
-
+                                    const partName = partData.part_name || 'Unknown';
                                     const availableStock = parseInt(partData.stock) || 0;
-                                    const initialQuantity = parseInt(pr_request.qty) || 0;
-                                    const totalStock = initialQuantity + availableStock;
+                                    const initialQty = parseInt(pr_request.qty) || 0;
+                                    const totalStock = initialQty + availableStock;
+
+                                    // === DOCUMENTS (READ-ONLY) ===
+                                    const docsHtml = pr_request.documents?.length > 0
+                                        ? pr_request.documents.map(doc => `
+                                            <div class="border rounded p-2 mb-1 bg-light">
+                                                <i class="bi bi-file-earmark-text me-2"></i>
+                                                <a href="/${doc.file_path}" target="_blank" class="text-decoration-none">
+                                                    ${doc.original_name}
+                                                </a>
+                                            </div>
+                                        `).join('')
+                                        : '<small class="text-muted">No documents attached</small>';
 
                                     const cardHeader = `
                                         <div class="card-header d-flex justify-content-between align-items-center bg-light border-bottom">
@@ -411,7 +390,7 @@
                                         </div>`;
 
                                     const row = `
-                                        <div class="material-card card mb-3 border border-2 border-secondary shadow-sm">
+                                        <div class="material-card card mb-3 border border-2 border-secondary shadow-sm" data-pr-id="${pr_request.id}">
                                             ${cardHeader}
                                             <div class="card-body">
                                                 <div class="mb-3">
@@ -424,19 +403,19 @@
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Available Stock</label>
-                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][requires_stock_reduction]" value="${isNaN(availableStock) ? 'N/A' : availableStock}" disabled>
+                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][requires_stock_reduction]" value="${availableStock}" disabled>
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Requested Quantity</label>
-                                                    <input type="number" class="form-control requested-quantity" name="pr_request[${materialCount}][qty]" value="${pr_request.qty || '1'}" data-initial-quantity="${pr_request.qty || 0}" data-total-stock="${totalStock}" data-pr-id="${pr_request.id}" data-available-stock="${availableStock}" min="0">
+                                                    <input type="number" class="form-control requested-quantity" name="pr_request[${materialCount}][qty]" value="${pr_request.qty || 1}" data-initial-quantity="${pr_request.qty || 0}" data-total-stock="${totalStock}" data-available-stock="${availableStock}" min="0">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Amount / 1 Item (Rp) <span class="text-muted">(Optional)</span></label>
-                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][amount]" value="${pr_request.amount || '0'}">
+                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][amount]" value="${pr_request.amount || 0}">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Other Cost</label>
-                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][other_cost]" value="${pr_request.other_cost || '0'}">
+                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][other_cost]" value="${pr_request.other_cost || 0}">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Vendor <span class="text-danger">*</span></label>
@@ -450,36 +429,38 @@
                                                     <label class="form-label">Tag</label>
                                                     <input type="text" class="form-control" name="pr_request[${materialCount}][tag]" value="${pr_request.tag || '0'}">
                                                 </div>
-                                                <input type="hidden" name="pr_request[${materialCount}][id]" value="${pr_request.id || ''}">
-                                                <input type="hidden" name="pr_request[${materialCount}][ticket_id]" value="${pr_request.ticket_id || ''}">
+
+                                                <!-- === ATTACHED DOCUMENTS (READ-ONLY) === -->
+                                                <div class="mb-3">
+                                                    <label class="form-label">Attached Documents</label>
+                                                    <div class="documents-list">
+                                                        ${docsHtml}
+                                                    </div>
+                                                </div>
+
+                                                <input type="hidden" name="pr_request[${materialCount}][id]" value="${pr_request.id}">
+                                                <input type="hidden" name="pr_request[${materialCount}][ticket_id]" value="${pr_request.ticket_id}">
                                             </div>
                                         </div>`;
-                                    $('#materialDataForm').append(row);
 
+                                    $('#materialDataForm').append(row);
                                     itemCount++;
                                     materialCount++;
-                                },
-                                error: function(xhr) {
-                                    Swal.fire('Error', 'Failed to retrieve part name', 'error');
                                 },
                                 complete: function() {
                                     if (index === response.pr_requests.length - 1) {
                                         if (materialCount > 0) {
                                             $('#materialModal').modal('show');
                                         } else {
-                                            Swal.fire({
-                                                icon: 'warning',
-                                                title: 'No Data',
-                                                text: 'No valid purchase requests found.'
-                                            });
+                                            Swal.fire('No Data', 'No valid requests found.', 'warning');
                                         }
                                     }
                                 }
                             });
                         });
                     },
-                    error: function(xhr) {
-                        Swal.fire('Error', 'Failed to retrieve ticket details', 'error');
+                    error: function() {
+                        Swal.fire('Error', 'Failed to load ticket details.', 'error');
                     }
                 });
             });

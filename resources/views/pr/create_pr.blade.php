@@ -79,7 +79,8 @@
                 </div>
                 <div class="modal-body">
                     <div class="container">
-                        <form id="createPrForm" method="POST" action="">
+                        <form id="createPrForm" method="POST" enctype="multipart/form-data">
+                            @csrf
                             <div class="card mb-3 card-body border border-primary">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDefault">
@@ -321,8 +322,7 @@
                                         <div class="border border-dashed rounded p-3 text-center bg-light dropzone-area" data-array-count="${arrayCount}">
                                             <p class="mb-1 text-muted">Drag & Drop or Click to Upload</p>
                                             <input type="file" class="form-control-file d-none file-input" 
-                                                name="pr_request[${arrayCount}][documents][]" multiple 
-                                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                                               name="pr_request[${arrayCount}][documents][]" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
                                             <button type="button" class="btn btn-outline-primary btn-sm browse-files">Browse</button>
                                         </div>
                                         <div class="uploaded-files mt-2"></div>
@@ -365,58 +365,76 @@
             });
 
             // Submit request
-            $('#submitRequest').click(function() {
-                const $button = $(this);
-                $button.prop('disabled', true).text('Submitting...');
+            $('#submitRequest').click(function (e) {
+                e.preventDefault();
+
+                const $btn = $(this);
+                $btn.prop('disabled', true).text('Submitting...');
                 $('#loadingSpinner').show();
 
-                const formData = $('#createPrForm').serializeArray();
-                let prRequests = [];
+                // Build ONLY the data needed for stock check
+                const stockData = [];
+                $('.card.border-primary[data-item-id]').each(function () {
+                    const id = $(this).data('item-id');
+                    const partlist_id = $(`input[name="pr_request[${id}][partlist_id]"]`).val();
+                    const qty = $(`input[name="pr_request[${id}][qty]"]`).val();
 
-                formData.forEach(function(item) {
-                    if (item.name.match(/pr_request\[(\d+)\]\[(.*)\]/)) {
-                        const index = parseInt(RegExp.$1);
-                        const field = RegExp.$2;
-                        if (!prRequests[index]) prRequests[index] = {};
-                        prRequests[index][field] = item.value;
+                    if (partlist_id && qty) {
+                        stockData.push({ partlist_id, qty });
                     }
                 });
 
-                prRequests = prRequests.filter(item => item && Object.keys(item).length > 0);
+                if (stockData.length === 0) {
+                    resetBtn();
+                    Swal.fire('Error', 'Please add at least one item.', 'error');
+                    return;
+                }
 
+                // Step 1: Validate stock (NO files sent)
                 $.ajax({
                     url: '{{ route('validate.stock') }}',
                     method: 'POST',
-                    data: { pr_request: prRequests },
+                    data: { pr_request: stockData },
                     headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                    success: function(response) {
-                        if (response.valid) {
-                            $.ajax({
-                                url: '/ticket',
-                                method: 'POST',
-                                data: $('#createPrForm').serialize(),
-                                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                                success: function(response) {
-                                    Swal.fire('Success', response.message, 'success').then(() => location.reload());
-                                },
-                                error: function(xhr) {
-                                    $button.prop('disabled', false).text('Submit Request');
-                                    $('#loadingSpinner').hide();
-                                    Swal.fire('Error', xhr.responseJSON?.error || 'Failed to create request', 'error');
-                                }
-                            });
-                        } else {
-                            $button.prop('disabled', false).text('Submit Request');
-                            $('#loadingSpinner').hide();
-                            Swal.fire('Error', response.error, 'error');
+                    success: function (res) {
+                        if (!res.valid) {
+                            resetBtn();
+                            Swal.fire('Stock Error', res.error, 'error');
+                            return;
                         }
+
+                        // Step 2: Submit full form WITH files
+                        const formData = new FormData($('#createPrForm')[0]);
+                        formData.append('advance_cash', $('#cashAdvance').val() || 0);
+
+                        $.ajax({
+                            url: '/ticket',
+                            method: 'POST',
+                            data: formData,
+                            processData: false,
+                            contentType: false,
+                            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                            success: function (res) {
+                                Swal.fire('Success', res.message, 'success')
+                                    .then(() => location.reload());
+                            },
+                            error: function (xhr) {
+                                resetBtn();
+                                const msg = xhr.responseJSON?.error || 'Submission failed';
+                                Swal.fire('Error', msg, 'error');
+                            }
+                        });
                     },
-                    error: function(xhr) {
-                        $button.prop('disabled', false).text('Submit Request');
-                        $('#loadingSpinner').hide();
-                        Swal.fire('Error', xhr.responseJSON?.error || 'Failed to validate stock', 'error');
+                    error: function () {
+                        resetBtn();
+                        Swal.fire('Error', 'Stock validation failed', 'error');
                     }
                 });
+
+                function resetBtn() {
+                    $btn.prop('disabled', false).text('Submit Request');
+                    $('#loadingSpinner').hide();
+                }
             });
 
             // Fetch part details

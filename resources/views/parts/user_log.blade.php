@@ -58,6 +58,8 @@
                                                 <span class="badge bg-warning">{{ $newData['status'] }}</span>
                                             @elseif($newData['status'] === 'Rejected')
                                                 <span class="badge bg-danger">{{ $newData['status'] }}</span>
+                                            @elseif($newData['status'] === 'Canceled')
+                                                <span class="badge bg-dark">{{ $newData['status'] }}</span>
                                             @else
                                                 <span class="badge bg-success">{{ $newData['status'] }}</span>
                                             @endif

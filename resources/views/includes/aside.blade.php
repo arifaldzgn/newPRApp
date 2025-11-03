@@ -47,7 +47,7 @@
                                 <ul class="sub-menu" aria-expanded="true">
                                     <li><a href="{{ route('pending') }}" key="t-pending">Pending</a></li>
                                     <li><a href="{{ route('approved') }}" key="t-approved">Approved</a></li>
-                                    <li><a href="{{ route('rejected') }}" key="t-rejected">Rejected</a></li>
+                                    <li><a href="{{ route('rejected') }}" key="t-rejected">Rejected/Canceled</a></li>
                                 </ul>
                             </li>
                         </ul>

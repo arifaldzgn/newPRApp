@@ -63,14 +63,23 @@
                                             <span class="badge bg-warning">{{ $dT->status }}</span>
                                         @elseif($dT->status === 'Rejected')
                                             <span class="badge bg-danger">{{ $dT->status }}</span>
+                                        @elseif($dT->status === 'Canceled')
+                                            <span class="badge bg-dark">{{ $dT->status }}</span>
                                         @else
                                             <span class="badge bg-success">{{ $dT->status }}</span>
                                         @endif
                                     </td>
                                     <td>
-                                        @if ($dT->status === 'Pending' || $dT->status === 'Revised' || $dT->status === 'HOD_Approved')
+                                        @if (in_array($dT->status, ['Pending', 'Revised', 'HOD_Approved']))
                                             <button class="btn btn-info btn-sm updateBtn" data-request-id="{{ $dT->id }}">Edit</button>
-                                            <button class="btn btn-danger btn-sm delete-btn" data-item-id="{{ $dT->id }}">Delete</button>
+
+                                            @if (auth()->user()->id === $dT->user_id || in_array(auth()->user()->role, ['admin', 'hod', 'purchasing']))
+                                                <button class="btn btn-warning btn-sm cancel-btn" data-item-id="{{ $dT->id }}">Cancel</button>
+                                            @endif
+
+                                            @if (auth()->user()->id === $dT->user_id || auth()->user()->role === 'admin')
+                                                <button class="btn btn-danger btn-sm delete-btn" data-item-id="{{ $dT->id }}">Delete</button>
+                                            @endif
                                         @else
                                             <span>-</span>
                                         @endif
@@ -155,6 +164,24 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-danger" id="confirmRejectButton">Reject</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="cancelReasonModal" class="modal fade" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Cancel Reason</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <textarea id="cancelReasonTextarea" class="form-control" placeholder="Enter reason for cancellation"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-warning" id="confirmCancelButton">Cancel Ticket</button>
                 </div>
             </div>
         </div>
@@ -470,7 +497,7 @@
 
             // View/Edit details
             $('.updateBtn').click(function() {
-                deletedMaterials = []; // Reset on each open
+                deletedMaterials = [];
                 const requestId = $(this).data('request-id');
                 $('#approveButton').data('request-id', requestId);
                 $('#rejectButton').data('request-id', requestId);
@@ -483,58 +510,39 @@
                         let itemCount = 1;
                         let materialCount = 0;
 
-                        // === Optional Document Section ===
+                        // Remove global doc section
                         $('#existingDocuments').empty();
+                        $('#enableDocumentSection').prop('checked', false);
+                        $('#documentSection').hide();
 
-                        if (response.documents && response.documents.length > 0) {
-                            $('#enableDocumentSection').prop('checked', true);
-                            $('#documentSection').show();
-
-                            response.documents.forEach(function(doc) {
-                                $('#existingDocuments').append(`
-                                    <div class="d-flex align-items-center justify-content-between border rounded p-2 mb-2">
-                                        <div>
-                                            <i class="bi bi-file-earmark-text me-2"></i>
-                                            <a href="${doc.url}" target="_blank">${doc.name}</a>
-                                        </div>
-                                        <button type="button" class="btn btn-sm btn-outline-danger remove-document" data-doc-id="${doc.id}">
-                                            <i class="bi bi-x-lg"></i> Remove Document
-                                        </button>
-                                    </div>
-                                `);
-                            });
-                        } else {
-                            $('#enableDocumentSection').prop('checked', false);
-                            $('#documentSection').hide();
-                        }
-
-                        // === Validate Material Data ===
                         if (!response.pr_requests || !Array.isArray(response.pr_requests)) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error',
-                                text: 'Invalid data received from server.'
-                            });
+                            Swal.fire('Error', 'Invalid data from server.', 'error');
                             return;
                         }
 
-                        // === Loop Each Material ===
                         $.each(response.pr_requests, function(index, pr_request) {
-                            if (!pr_request || typeof pr_request !== 'object' || !pr_request.partlist_id) {
-                                return;
-                            }
+                            if (!pr_request?.partlist_id) return;
 
-                            const id = pr_request.partlist_id;
                             $.ajax({
-                                url: '/retrieve-part-name/' + id,
+                                url: '/retrieve-part-name/' + pr_request.partlist_id,
                                 method: 'GET',
                                 success: function(partData) {
-                                    const partName = partData.part_name || '';
-                                    if (!partName) return;
-
+                                    const partName = partData.part_name || 'Unknown';
                                     const availableStock = parseInt(partData.stock) || 0;
-                                    const initialQuantity = parseInt(pr_request.qty) || 0;
-                                    const totalStock = initialQuantity + availableStock;
+                                    const initialQty = parseInt(pr_request.qty) || 0;
+                                    const totalStock = initialQty + availableStock;
+
+                                    // === DOCUMENTS (READ-ONLY) ===
+                                    const docsHtml = pr_request.documents?.length > 0
+                                        ? pr_request.documents.map(doc => `
+                                            <div class="border rounded p-2 mb-1 bg-light">
+                                                <i class="bi bi-file-earmark-text me-2"></i>
+                                                <a href="/${doc.file_path}" target="_blank" class="text-decoration-none">
+                                                    ${doc.original_name}
+                                                </a>
+                                            </div>
+                                        `).join('')
+                                        : '<small class="text-muted">No documents attached</small>';
 
                                     const cardHeader = `
                                         <div class="card-header d-flex justify-content-between align-items-center bg-light border-bottom">
@@ -558,19 +566,19 @@
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Available Stock</label>
-                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][requires_stock_reduction]" value="${isNaN(availableStock) ? 'N/A' : availableStock}" disabled>
+                                                    <input type="text" class="form-control" name="pr_request[${materialCount}][requires_stock_reduction]" value="${availableStock}" disabled>
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Requested Quantity</label>
-                                                    <input type="number" class="form-control requested-quantity" name="pr_request[${materialCount}][qty]" value="${pr_request.qty || '1'}" data-initial-quantity="${pr_request.qty || 0}" data-total-stock="${totalStock}" data-available-stock="${availableStock}" min="0">
+                                                    <input type="number" class="form-control requested-quantity" name="pr_request[${materialCount}][qty]" value="${pr_request.qty || 1}" data-initial-quantity="${pr_request.qty || 0}" data-total-stock="${totalStock}" data-available-stock="${availableStock}" min="0">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Amount / 1 Item (Rp) <span class="text-muted">(Optional)</span></label>
-                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][amount]" value="${pr_request.amount || '0'}">
+                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][amount]" value="${pr_request.amount || 0}">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Other Cost</label>
-                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][other_cost]" value="${pr_request.other_cost || '0'}">
+                                                    <input type="number" class="form-control" name="pr_request[${materialCount}][other_cost]" value="${pr_request.other_cost || 0}">
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Vendor <span class="text-danger">*</span></label>
@@ -584,36 +592,38 @@
                                                     <label class="form-label">Tag</label>
                                                     <input type="text" class="form-control" name="pr_request[${materialCount}][tag]" value="${pr_request.tag || '0'}">
                                                 </div>
-                                                <input type="hidden" name="pr_request[${materialCount}][id]" value="${pr_request.id || ''}">
-                                                <input type="hidden" name="pr_request[${materialCount}][ticket_id]" value="${pr_request.ticket_id || ''}">
+
+                                                <!-- === ATTACHED DOCUMENTS (READ-ONLY) === -->
+                                                <div class="mb-3">
+                                                    <label class="form-label">Attached Documents</label>
+                                                    <div class="documents-list">
+                                                        ${docsHtml}
+                                                    </div>
+                                                </div>
+
+                                                <input type="hidden" name="pr_request[${materialCount}][id]" value="${pr_request.id}">
+                                                <input type="hidden" name="pr_request[${materialCount}][ticket_id]" value="${pr_request.ticket_id}">
                                             </div>
                                         </div>`;
-                                    $('#materialDataForm').append(row);
 
+                                    $('#materialDataForm').append(row);
                                     itemCount++;
                                     materialCount++;
-                                },
-                                error: function(xhr) {
-                                    Swal.fire('Error', 'Failed to retrieve part name', 'error');
                                 },
                                 complete: function() {
                                     if (index === response.pr_requests.length - 1) {
                                         if (materialCount > 0) {
                                             $('#materialModal').modal('show');
                                         } else {
-                                            Swal.fire({
-                                                icon: 'warning',
-                                                title: 'No Data',
-                                                text: 'No valid purchase requests found.'
-                                            });
+                                            Swal.fire('No Data', 'No valid requests found.', 'warning');
                                         }
                                     }
                                 }
                             });
                         });
                     },
-                    error: function(xhr) {
-                        Swal.fire('Error', 'Failed to retrieve ticket details', 'error');
+                    error: function() {
+                        Swal.fire('Error', 'Failed to load ticket details.', 'error');
                     }
                 });
             });
@@ -813,6 +823,37 @@
                         text: 'Requested quantity exceeds the available stock.'
                     });
                     $(this).val($(this).data('initial-quantity'));
+                }
+            });
+        });
+
+        // Cancel ticket
+        $('.cancel-btn').click(function() {
+            const itemId = $(this).data('item-id');
+            $('#cancelReasonModal').modal('show');
+            $('#confirmCancelButton').data('item-id', itemId);
+        });
+
+        $('#confirmCancelButton').click(function() {
+            const itemId = $(this).data('item-id');
+            const reason = $('#cancelReasonTextarea').val().trim();
+
+            // if (!reason) {
+            //     Swal.fire('Error', 'Please provide a reason for cancellation.', 'error');
+            //     return;
+            // }
+
+            $.ajax({
+                url: '/ticket/' + itemId + '/cancel',
+                method: 'PUT',
+                data: { reason: reason },
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                success: function(response) {
+                    Swal.fire('Canceled!', response.message, 'success').then(() => location.reload());
+                    $('#cancelReasonModal').modal('hide');
+                },
+                error: function(xhr) {
+                    Swal.fire('Error', xhr.responseJSON?.error || 'Failed to cancel ticket', 'error');
                 }
             });
         });

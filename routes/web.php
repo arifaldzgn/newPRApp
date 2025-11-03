@@ -55,6 +55,7 @@ Route::group(['middleware' => 'auth'], function () {
     // Delete individual part from request
     Route::delete('/delete-part/{id}', [PRController::class, 'destroyPart']);
     Route::get('/retrieve-part-name/{id}', [PRController::class, 'retrievePartName'])->name('retrieve.part.name');
+    Route::put('/ticket/{id}/cancel', [PRController::class, 'cancelTicket'])->name('ticket.cancel');
     // ========================== END OF PR ROUTES ==========================
 
     // ===================== START OF USER MANAGEMENT =======================
